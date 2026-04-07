@@ -10,17 +10,9 @@ readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.11"
 authors = [
-    {name = "Chris Lomeli"}
+    {name = "Your Name"}
 ]
 keywords = ["langgraph", "agent", "simulation", "wildfire", "world-engine"]
-classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-]
 
 dependencies = [
     "pydantic>=2.0",
@@ -39,11 +31,7 @@ dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.23",
     "pytest-cov>=4.0",
-    "nbconvert>=7.0",
 ]
-
-[project.urls]
-Homepage = "https://github.com/chrislomeli/world-simulator"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/sensors", "src/tools", "src/domains", "src/transport", "src/bridge", "src/world", "src/agents", "src/resources"]
@@ -52,3 +40,4 @@ packages = ["src/sensors", "src/tools", "src/domains", "src/transport", "src/bri
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 asyncio_mode = "auto"
+pythonpath = ["src"]
