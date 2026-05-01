@@ -19,6 +19,7 @@ from langgraph.store.base import BaseStore
 
 from agents.cluster.node_tracer import node_trace
 from agents.cluster.state import AnomalyFinding, ClusterAgentState, StatusValue
+from prompts import registry
 
 logger = logging.getLogger(__name__)
 
@@ -56,8 +57,19 @@ def classify(state: ClusterAgentState) -> dict:
     Produces a placeholder finding so the rest of the pipeline
     has something to work with end-to-end.
     """
+
     cluster_id = state.cluster_id
     trigger = state.trigger_event
+
+    sys_content = registry.render("classify", {
+        "cluster_id": cluster_id,
+        "events": state.sensor_events,
+        "trigger_id": trigger.source_id if trigger else "none",
+    })
+
+
+
+
 
     stub_finding: AnomalyFinding = AnomalyFinding(
         finding_id= str(uuid4()),

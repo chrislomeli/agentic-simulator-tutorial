@@ -2232,12 +2232,14 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "ipykernel" },
+    { name = "jinja2" },
     { name = "langchain-anthropic" },
     { name = "langchain-core" },
     { name = "langchain-openai" },
     { name = "langgraph" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
+    { name = "pyyaml" },
     { name = "structlog" },
 ]
 
@@ -2258,6 +2260,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "ipykernel", specifier = ">=7.2.0" },
+    { name = "jinja2", specifier = ">=3.1.6" },
     { name = "langchain-anthropic", specifier = ">=1.4.0" },
     { name = "langchain-core", specifier = ">=0.3" },
     { name = "langchain-openai", specifier = ">=1.1.12" },
@@ -2265,6 +2268,7 @@ requires-dist = [
     { name = "langgraph", specifier = ">=0.2" },
     { name = "pydantic", specifier = ">=2.0" },
     { name = "pydantic-settings", specifier = ">=2.0" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "structlog", specifier = ">=25.5.0" },
 ]
 provides-extras = ["llm"]
