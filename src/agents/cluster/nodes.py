@@ -20,6 +20,7 @@ from agents.cluster.node_tracer import node_trace
 from agents.cluster.state import AnomalyFinding, ClusterAgentState
 from agents.routing import _route_base
 from agents.state_types import StatusValue
+from prompts import registry
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,12 @@ def classify(state: ClusterAgentState) -> dict:
 
     cluster_id = state.cluster_id
     trigger = state.trigger_event
+
+    sys_content = registry.render("classify", {
+        "cluster_id": cluster_id,
+        "events": state.sensor_events,
+        "trigger_id": trigger.source_id if trigger else "none",
+    })
 
     stub_finding: AnomalyFinding = AnomalyFinding(
         finding_id= str(uuid4()),
