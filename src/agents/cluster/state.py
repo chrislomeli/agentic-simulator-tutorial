@@ -123,6 +123,7 @@ class ClusterAgentState(BaseModel):
 
     # ── Identity ──────────────────────────────────────────────────────
     cluster_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    session_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     # Which workflow execution this state belongs to.
     # Matches the workflow_id in WorkflowRunner.
     workflow_id: str
