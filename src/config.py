@@ -28,13 +28,16 @@ Deployment modes
 from __future__ import annotations
 
 import dataclasses
+import logging
 import os
 from functools import lru_cache
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from enum import Enum
+
+logger = logging.getLogger(__name__)
 
 class LLMProvider(Enum):
     STUB = "STUB"
@@ -124,5 +127,89 @@ def get_settings() -> Settings:
     so a fresh Settings object is created.
     """
     return Settings()
+
+
+# ── LLM Registry ──────────────────────────────────────────────────────────────
+
+class LLMRegistry:
+    """
+    Role-based catalog of LangChain chat models.
+
+    Built once at startup and threaded into graph builders. Nodes request
+    a model by role ("classifier", "supervisor") without knowing which
+    provider or model was configured.
+
+    Usage:
+        registry = build_llm_registry(settings, {"classifier": classifier_model_cfg})
+        llm = registry.get("classifier")
+        result = llm.invoke(messages)
+    """
+
+    def __init__(self, clients: dict[str, Any]) -> None:
+        self._clients = clients
+
+    def get(self, role: str) -> Any:
+        client = self._clients.get(role)
+        if client is not None:
+            return client
+        fallback = self._clients.get("classifier")
+        if fallback is not None:
+            logger.warning("No LLM for role %r — falling back to 'classifier'", role)
+            return fallback
+        raise KeyError(
+            f"No LLM registered for role {role!r} and no 'classifier' fallback."
+        )
+
+    @property
+    def roles(self) -> list[str]:
+        return sorted(self._clients)
+
+
+def _build_chat_model(model_cfg: LLMModel) -> Any:
+    """Instantiate a LangChain chat model from an LLMModel config."""
+    if model_cfg.provider == LLMProvider.OPENAI:
+        from langchain_openai import ChatOpenAI
+        return ChatOpenAI(model=model_cfg.model, temperature=0, api_key=model_cfg.api_key)
+    elif model_cfg.provider == LLMProvider.ANTHROPIC:
+        from langchain_anthropic import ChatAnthropic
+        return ChatAnthropic(model_name=model_cfg.model, api_key=model_cfg.api_key, temperature=0)
+    elif model_cfg.provider == LLMProvider.STUB:
+        return None
+    else:
+        raise ValueError(f"Unknown provider: {model_cfg.provider}")
+
+
+def build_llm_registry(
+    settings: Settings,
+    role_models: dict[str, LLMModel],
+) -> LLMRegistry:
+    """
+    Build an LLMRegistry from a role → LLMModel mapping.
+
+    API keys are resolved from settings at build time. STUB provider
+    roles are skipped — nodes must guard against registry.get() returning
+    None when running in stub mode.
+
+    Example:
+        registry = build_llm_registry(settings, {
+            "classifier": LLMModel(
+                model="claude-haiku-4-5-20251001",
+                key_label="anthropic_api_key",
+                provider=LLMProvider.ANTHROPIC,
+            ),
+        })
+    """
+    clients: dict[str, Any] = {}
+    for role, model_cfg in role_models.items():
+        resolved = dataclasses.replace(model_cfg)
+        resolved.api_key = getattr(settings, resolved.key_label, "") or None
+        if resolved.provider == LLMProvider.STUB:
+            logger.info("Skipping role %r — STUB provider", role)
+            continue
+        chat_model = _build_chat_model(resolved)
+        if chat_model is not None:
+            clients[role] = chat_model
+            logger.info("Registered LLM for role %r → %s (%s)", role, resolved.model, resolved.provider.value)
+    return LLMRegistry(clients)
 
 
