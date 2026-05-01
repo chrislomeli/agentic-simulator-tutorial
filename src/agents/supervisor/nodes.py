@@ -18,6 +18,7 @@ from langgraph.store.base import BaseStore
 from langgraph.types import Send
 
 from agents.cluster.graph import cluster_agent_graph
+from agents.cluster.node_tracer import node_trace
 from agents.cluster.state import ClusterAgentState, StatusValue
 from agents.supervisor.state import SupervisorState
 
@@ -67,6 +68,7 @@ def fan_out_to_clusters(state: SupervisorState) -> List[Send]:
 
 # ── Wrapper node: invokes the cluster subgraph ───────────────────────────────
 
+@node_trace("run_cluster_agent")
 def run_cluster_agent(state: ClusterAgentState) -> dict:
     """
     Wrapper node — runs once per Send() emitted by fan_out_to_clusters.
@@ -87,6 +89,7 @@ def run_cluster_agent(state: ClusterAgentState) -> dict:
 
 # ── Stub nodes (the supervisor's own steps) ──────────────────────────────────
 
+@node_trace("assess_situation")
 def assess_situation(state: SupervisorState) -> dict:
     """
     Stub assessor — produces a placeholder summary.
@@ -110,6 +113,7 @@ def assess_situation(state: SupervisorState) -> dict:
     }
 
 
+@node_trace("decide_actions")
 def decide_actions(state: SupervisorState) -> dict:
     """
     Stub decider — returns no commands.
@@ -132,6 +136,7 @@ def make_dispatch_commands(store: Optional[BaseStore] = None):
     parameter is unused in stub mode.
     """
 
+    @node_trace("dispatch_commands")
     def dispatch_commands(state: SupervisorState) -> dict:
         """
         Stub dispatcher — logs the commands instead of sending them.
