@@ -19,6 +19,15 @@ In this session the classification logic is a stub (hardcoded). Session 3 replac
 When something breaks in stub mode you know exactly which layer failed. Once the graph structure works, swapping the stub for an LLM is just changing one function.
 
 ---
+## Changes
+```bash
+ 3 files changed, 423 insertions(+)
+ create mode 100644 main.py
+ create mode 100644 src/agents/cluster/cluster_graph.py
+ create mode 100644 src/agents/cluster/state.py
+```
+
+---
 
 ## Setup
 
