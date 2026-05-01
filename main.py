@@ -2,10 +2,10 @@
 main.py — entry point for the world simulator tutorial.
 
 Session 02 stage:
-  1. Build the cluster agent (stub mode), invoke it with a hand-crafted
+  1. Tick the world engine a few times and print fire-behavior snapshots
+     so you can see the ground truth your agent will eventually try to infer.
+  2. Build the cluster agent (stub mode), invoke it with a hand-crafted
      SensorEvent, and print the AnomalyFinding it produces.
-  2. Drive the full supervisor graph end-to-end, including the parallel
-     cluster fan-out via the Send API.
 
 Run from the project root:
   python main.py
@@ -15,16 +15,18 @@ If you see ImportError, run: uv pip install -e ".[llm]" --group dev
 """
 import logging
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-)
+# configure_logging() must come before all project imports so that
+# module-level loggers (e.g. the compiled cluster_agent_graph) are
+# captured by structlog from the first record onward.
+from logging_config import configure_logging
+configure_logging(level=logging.INFO)
 
-from agents.cluster.graph import build_cluster_agent_graph, cluster_agent_graph
+from agents.cluster.graph import build_cluster_agent_graph
 from agents.cluster.state import ClusterAgentState
 from agents.supervisor.graph import build_supervisor_graph
 from agents.supervisor.state import SupervisorState
 from transport.schemas import SensorEvent
+from agents.cluster.graph import cluster_agent_graph
 
 PRINT_GRAPH = True
 
@@ -59,6 +61,8 @@ def demo_cluster_agent() -> None:
         print(f"  - {finding.anomaly_type} (confidence={finding.confidence})")
         print(f"    {finding.summary}")
     print()
+
+
 
 
 def demo_supervisor() -> None:
