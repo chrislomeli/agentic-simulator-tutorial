@@ -25,8 +25,8 @@ uv venv && source .venv/bin/activate
 uv pip install -e ".[llm]" --group dev
 git remote add tutorial https://github.com/chrislomeli/agentic-world-simulator.git
 git fetch tutorial
-git checkout tutorial/main -- src/world/ src/domains/ src/sensors/ src/transport/ src/bridge/ src/resources/ src/config.py tests/
-git checkout tutorial/main -- src/agents/cluster/ src/tools/
+git checkout tutorial/main -- world/ domains/ sensors/ transport/ bridge/ resources/ config.py tests/
+git checkout tutorial/main -- agents/cluster/ tools/
 pytest tests/agents/test_cluster.py -q   # should pass before you start
 ```
 
@@ -48,8 +48,8 @@ pytest tests/agents/test_cluster.py -q   # should pass before you start
 
 | File | Change | What it contains |
 |------|--------|-----------------|
-| `src/agents/supervisor/state.py` | **Create** | `SupervisorState` TypedDict, `aggregate_findings_reducer` |
-| `src/agents/supervisor/graph.py` | **Create** | `fan_out_to_clusters`, `run_cluster_agent`, stub nodes, `build_supervisor_graph` |
+| `agents/supervisor/state.py` | **Create** | `SupervisorState` BaseModel, `aggregate_findings_reducer` |
+| `agents/supervisor/graph.py` | **Create** | `fan_out_to_clusters`, `run_cluster_agent`, stub nodes, `build_supervisor_graph` |
 
 When you're done:
 
@@ -112,7 +112,7 @@ fan_out → [Send A, Send B, Send C]
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| `KeyError` in target node | Send input dict is missing required fields | Every field in the target's TypedDict must be present in the Send input — including optional fields (set them to `None` or `[]`) |
+| `KeyError` in target node | Send input dict is missing required fields | Every field in the target's state model must be present in the Send input — including optional fields (set them to `None` or `[]`) |
 | Results overwrite instead of merge | No reducer on the output field | Use `Annotated[List[...], my_reducer]` on the field that collects parallel results |
 | Only one Send runs | `active_cluster_ids` has one item | Not a bug — dynamic fan-out scales to N, including N=1 |
 | Graph hangs | One Send target raises an exception | Add error handling inside the target node so it returns error status instead of raising |
@@ -138,14 +138,14 @@ This is the **supervisor pattern** in multi-agent systems. Cluster agents are sp
 The supervisor has its own state schema, separate from `ClusterAgentState`:
 
 ```python
-class SupervisorState(TypedDict):
-    active_cluster_ids: List[str]                                    # Which clusters to fan out to
-    cluster_findings: Annotated[List[AnomalyFinding], aggregate_findings_reducer]  # Aggregated results
-    messages: Annotated[List[BaseMessage], add_messages]             # LLM conversation (Session 10)
-    pending_commands: List[ActuatorCommand]                          # Actions to dispatch
-    situation_summary: Optional[str]                                 # Human-readable assessment
-    status: Literal["idle", "aggregating", "assessing", "deciding", "dispatching", "complete", "error"]
-    error_message: Optional[str]
+class SupervisorState(BaseModel):
+    active_cluster_ids: List[str] = Field(default_factory=list)      # Which clusters to fan out to
+    cluster_findings: Annotated[List[AnomalyFinding], aggregate_findings_reducer] = Field(default_factory=list)  # Aggregated results
+    messages: Annotated[List[BaseMessage], add_messages] = Field(default_factory=list)  # LLM conversation (Session 10)
+    pending_commands: List[ActuatorCommand] = Field(default_factory=list)  # Actions to dispatch
+    situation_summary: Optional[str] = None                          # Human-readable assessment
+    status: Literal["idle", "aggregating", "assessing", "deciding", "dispatching", "complete", "error"] = Field(default="idle")
+    error_message: Optional[str] = None
 ```
 
 **Key differences from ClusterAgentState:**
@@ -448,9 +448,9 @@ Key tests to look for:
 
 ## Key files
 
-- `src/agents/supervisor/state.py` — `SupervisorState` TypedDict, `aggregate_findings_reducer`
-- `src/agents/supervisor/graph.py` — `build_supervisor_graph()`, `fan_out_to_clusters`, `run_cluster_agent`, stub nodes
-- `src/actuators/base.py` — `ActuatorCommand` (the supervisor's output format)
+- `agents/supervisor/state.py` — `SupervisorState` BaseModel, `aggregate_findings_reducer`
+- `agents/supervisor/graph.py` — `build_supervisor_graph()`, `fan_out_to_clusters`, `run_cluster_agent`, stub nodes
+- `actuators/base.py` — `ActuatorCommand` (the supervisor's output format)
 
 ---
 

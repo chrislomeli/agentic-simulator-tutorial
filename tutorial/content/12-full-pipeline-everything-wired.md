@@ -23,7 +23,7 @@ uv venv && source .venv/bin/activate
 uv pip install -e ".[llm]" --group dev
 git remote add tutorial https://github.com/chrislomeli/agentic-world-simulator.git
 git fetch tutorial
-git checkout tutorial/main -- src/ tests/
+git checkout tutorial/main -- / tests/
 pytest tests/ -q   # everything should pass before you start
 ```
 
@@ -423,10 +423,10 @@ Key things to verify:
 
 ## Key files
 
-- `src/sensors/publisher.py` — `SensorPublisher.run()` async loop
-- `src/bridge/consumer.py` — `EventBridgeConsumer.run()` async loop
-- `src/agents/cluster/graph.py` — cluster agent graph
-- `src/agents/supervisor/graph.py` — supervisor graph
+- `sensors/publisher.py` — `SensorPublisher.run()` async loop
+- `bridge/consumer.py` — `EventBridgeConsumer.run()` async loop
+- `agents/cluster/graph.py` — cluster agent graph
+- `agents/supervisor/graph.py` — supervisor graph
 
 ---
 

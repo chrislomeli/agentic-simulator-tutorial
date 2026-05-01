@@ -23,7 +23,7 @@ uv venv && source .venv/bin/activate
 uv pip install -e ".[llm]" --group dev
 git remote add tutorial https://github.com/chrislomeli/agentic-world-simulator.git
 git fetch tutorial
-git checkout tutorial/main -- src/ tests/
+git checkout tutorial/main -- / tests/
 pytest tests/ -q   # everything should pass before you start
 ```
 
@@ -549,10 +549,10 @@ Run the `PreparednessEvaluator` script. Verify:
 
 ## Key files
 
-- `src/world/generic_engine.py` — `GenericGroundTruthSnapshot`, `engine.history`
-- `src/resources/inventory.py` — `check_preparedness()`, `readiness_summary()`
-- `src/agents/supervisor/state.py` — `SupervisorState` (situation_summary, pending_commands)
-- `src/tools/resource_tools.py` — resource querying tools
+- `world/generic_engine.py` — `GenericGroundTruthSnapshot`, `engine.history`
+- `resources/inventory.py` — `check_preparedness()`, `readiness_summary()`
+- `agents/supervisor/state.py` — `SupervisorState` (situation_summary, pending_commands)
+- `tools/resource_tools.py` — resource querying tools
 
 ---
 

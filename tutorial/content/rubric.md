@@ -11,7 +11,7 @@ Coverage in testbed: **covered** / **partial** / **not yet**
 
 | Skill | Level | What an interviewer wants to hear | Testbed coverage | Where |
 |-------|-------|----------------------------------|-----------------|-------|
-| StateGraph + TypedDict state | foundational | State is the single shared object; nodes read and return partial updates; reducers merge them | covered | Every subgraph — sensor cluster agent, supervisor |
+| StateGraph + Pydantic state | foundational | State is the single shared object (Pydantic BaseModel); nodes read and return partial updates; reducers merge them | covered | Every subgraph — sensor cluster agent, supervisor |
 | Nodes — functions vs runnables | foundational | Any callable works; runnables give streaming + observability for free | covered | All agent nodes |
 | Edges — normal vs conditional | foundational | Conditional edge is a function on state; must return a node name or END | covered | Routing after anomaly classification |
 | Reducers and Annotated state | mid-level | Default reducer overwrites; `add_messages` appends; custom reducers handle merging concurrent node outputs | covered | Merging readings from parallel sensor nodes |
@@ -52,7 +52,7 @@ in parallel is the perfect natural exercise for it. Prioritize this.
 | Checkpointers — in-memory vs Postgres | mid-level | `MemorySaver` for dev; `PostgresSaver` for prod; `thread_id` is the resume key; state survives crashes | covered | All persistent agents; crash recovery scenarios |
 | Thread-level vs cross-thread memory | mid-level | Checkpointer = within a run; Store = shared across runs and agents; different access patterns | covered | Supervisor shares incident history across cluster agents via Store |
 | Long-term memory with Store + embeddings | advanced | `InMemoryStore` / custom Store; semantic search over past decisions; pgvector integration | partial | Agent recalls similar past incidents — needs pgvector scenario |
-| State schema evolution | advanced | Adding fields to TypedDict with defaults; migration strategy for persisted checkpoints | not yet | Not in testbed — separate exercise |
+| State schema evolution | advanced | Adding fields to BaseModel with `Field(default=...)`; migration strategy for persisted checkpoints | not yet | Not in testbed — separate exercise |
 
 ---
 

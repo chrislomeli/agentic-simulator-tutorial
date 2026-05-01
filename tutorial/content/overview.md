@@ -37,7 +37,7 @@ Sessions 1–5 build infrastructure (no AI). Sessions 6–10 add agents. Session
 | 03 | Sensors — Noisy Observations | SensorBase subclasses, emit(), SensorEvent | Read sensors, compare to ground truth |
 | 04 | Sensor Inventory + Publisher | SensorInventory, SensorPublisher, failure modes | `publisher.run()` → events into a queue |
 | 05 | Event Queue + Bridge Consumer | SensorEventQueue, EventBridgeConsumer, async plumbing | Producer/consumer pipeline with logging callback |
-| 06 | Cluster Agent — Stub Mode | LangGraph StateGraph, TypedDict state, stub nodes | Feed events → get AnomalyFinding output |
+| 06 | Cluster Agent — Stub Mode | LangGraph StateGraph, Pydantic state, stub nodes | Feed events → get AnomalyFinding output |
 | 07 | Cluster Agent — LLM Mode | bind_tools, ToolNode, ReAct loop, conditional edges | Same inputs, LLM-powered classification |
 | 08 | Full Sensor→Agent Pipeline | Wire publisher → queue → consumer → cluster agent | End-to-end: world ticks → findings |
 | 09 | Supervisor Agent — Stub Mode | Send API fan-out, custom reducers, multi-agent | Feed findings → get ActuatorCommands |
@@ -58,7 +58,7 @@ Each cell shows which session(s) exercise that rubric skill.
 
 | Rubric Skill | Level | Sessions | Status |
 |-------------|-------|----------|--------|
-| StateGraph + TypedDict state | foundational | 06, 09 | ✅ covered |
+| StateGraph + Pydantic state | foundational | 06, 09 | ✅ covered |
 | Nodes — functions vs runnables | foundational | 06, 07 | ✅ covered |
 | Edges — normal vs conditional | foundational | 06, 07 | ✅ covered |
 | Reducers and Annotated state | mid-level | 06, 09 | ✅ covered |

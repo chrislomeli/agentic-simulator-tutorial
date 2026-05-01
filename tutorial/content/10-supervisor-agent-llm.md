@@ -26,8 +26,8 @@ uv venv && source .venv/bin/activate
 uv pip install -e ".[llm]" --group dev
 git remote add tutorial https://github.com/chrislomeli/agentic-world-simulator.git
 git fetch tutorial
-git checkout tutorial/main -- src/world/ src/domains/ src/sensors/ src/transport/ src/bridge/ src/resources/ src/config.py tests/
-git checkout tutorial/main -- src/agents/ src/tools/sensor_tools.py
+git checkout tutorial/main -- world/ domains/ sensors/ transport/ bridge/ resources/ config.py tests/
+git checkout tutorial/main -- agents/ tools/sensor_tools.py
 pytest tests/agents/test_supervisor.py -q   # should pass before you start
 ```
 
@@ -48,8 +48,8 @@ pytest tests/agents/test_supervisor.py -q   # should pass before you start
 
 | File | Change | What it contains |
 |------|--------|-----------------|
-| `src/tools/supervisor_tools.py` | **Create** | 4 `@tool` functions for cross-cluster finding analysis: `get_all_findings`, `get_findings_by_cluster`, `get_finding_summary`, `check_cross_cluster` |
-| `src/agents/supervisor/graph.py` | **Modify** | Add LLM mode: `_make_assess_llm_node`, `_make_decide_llm_node`, `route_after_assess_llm`, `route_after_decide_llm`, `_parse_assessment`, `_parse_commands` |
+| `tools/supervisor_tools.py` | **Create** | 4 `@tool` functions for cross-cluster finding analysis: `get_all_findings`, `get_findings_by_cluster`, `get_finding_summary`, `check_cross_cluster` |
+| `agents/supervisor/graph.py` | **Modify** | Add LLM mode: `_make_assess_llm_node`, `_make_decide_llm_node`, `route_after_assess_llm`, `route_after_decide_llm`, `_parse_assessment`, `_parse_commands` |
 
 When you're done:
 
@@ -745,9 +745,9 @@ Key tests to look for:
 
 ## Key files
 
-- `src/agents/supervisor/graph.py` — `_make_assess_llm_node`, `_make_decide_llm_node`, `route_after_assess_llm`, `route_after_decide_llm`, `_parse_assessment`, `_parse_commands`
-- `src/tools/supervisor_tools.py` — 4 supervisor tools: `get_all_findings`, `get_findings_by_cluster`, `get_finding_summary`, `check_cross_cluster`
-- `src/actuators/base.py` — `ActuatorCommand` model
+- `agents/supervisor/graph.py` — `_make_assess_llm_node`, `_make_decide_llm_node`, `route_after_assess_llm`, `route_after_decide_llm`, `_parse_assessment`, `_parse_commands`
+- `tools/supervisor_tools.py` — 4 supervisor tools: `get_all_findings`, `get_findings_by_cluster`, `get_finding_summary`, `check_cross_cluster`
+- `actuators/base.py` — `ActuatorCommand` model
 
 ---
 

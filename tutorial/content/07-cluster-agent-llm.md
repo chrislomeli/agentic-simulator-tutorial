@@ -23,8 +23,8 @@ uv venv && source .venv/bin/activate
 uv pip install -e ".[llm]" --group dev
 git remote add tutorial https://github.com/chrislomeli/agentic-world-simulator.git
 git fetch tutorial
-git checkout tutorial/main -- src/world/ src/domains/ src/sensors/ src/transport/ src/bridge/ src/resources/ src/config.py tests/
-git checkout tutorial/main -- src/agents/cluster/state.py src/agents/cluster/graph.py
+git checkout tutorial/main -- world/ domains/ sensors/ transport/ bridge/ resources/ config.py tests/
+git checkout tutorial/main -- agents/cluster/state.py agents/cluster/cluster_graph.py
 pytest tests/agents/test_cluster.py -q   # should pass before you start
 ```
 
@@ -35,7 +35,7 @@ pytest tests/agents/test_cluster.py -q   # should pass before you start
 | Skill | Level | Where in this session |
 |-------|-------|-----------------------|
 | Tool definition — @tool decorator | foundational | `sensor_tools.py` — 4 tools with docstrings + type hints |
-| ToolNode + bind_tools | foundational | `llm.bind_tools(SENSOR_TOOLS)`, `ToolNode(SENSOR_TOOLS)` in `graph.py` |
+| ToolNode + bind_tools | foundational | `llm.bind_tools(SENSOR_TOOLS)`, `ToolNode(SENSOR_TOOLS)` in `cluster_graph.py` |
 | Cycles / loops | mid-level | `tool_node → classify` back-edge creates the ReAct loop |
 | Dynamic branching | mid-level | `route_after_classify_llm` — checks `tool_calls` to decide loop or exit |
 
@@ -45,8 +45,8 @@ pytest tests/agents/test_cluster.py -q   # should pass before you start
 
 | File | Change | What it contains |
 |------|--------|-----------------|
-| `src/tools/sensor_tools.py` | **Create** | 4 `@tool` functions the LLM calls to inspect sensor data; module-level state holder |
-| `src/agents/cluster/graph.py` | **Modify** | Add LLM mode branch: `_make_classify_llm_node`, `_parse_llm_findings`, `route_after_classify_llm`, `tool_node` |
+| `tools/sensor_tools.py` | **Create** | 4 `@tool` functions the LLM calls to inspect sensor data; module-level state holder |
+| `agents/cluster/cluster_graph.py` | **Modify** | Add `llm` parameter to builder; add LLM mode branch: `_make_classify_llm_node`, `_parse_llm_findings`, `route_after_classify_llm`, `tool_node` |
 
 When you're done:
 
@@ -204,19 +204,19 @@ This avoids passing the full LangGraph state into each tool function. Tools are 
 
 ## The LLM node: classify_llm
 
-The classify_llm node is built by a factory function that binds tools to the LLM:
+The classify_llm node is built by a factory function that binds tools to the LLM. Notice that state fields are accessed as attributes (not dict keys) because `ClusterAgentState` is a Pydantic `BaseModel`:
 
 ```python
 def _make_classify_llm_node(llm_with_tools: BaseChatModel):
     def classify_llm(state: ClusterAgentState) -> dict:
-        cluster_id = state.get("cluster_id", "unknown")
-        events = state.get("sensor_events", [])
-        trigger = state.get("trigger_event")
-        messages = state.get("messages", [])
-        
+        cluster_id = state.cluster_id
+        events = state.sensor_events
+        trigger = state.trigger_event
+        messages = state.messages
+
         # Load tool state so tools can read the sensor events
         set_tool_state(events, cluster_id)
-        
+
         # Build initial messages if this is the first call
         if not messages:
             sys_msg = SystemMessage(
@@ -237,14 +237,14 @@ def _make_classify_llm_node(llm_with_tools: BaseChatModel):
             )
             user_msg = HumanMessage(content=user_content)
             messages = [sys_msg, user_msg]
-        
+
         response = llm_with_tools.invoke(messages)
-        
+
         return {
             "messages": [response],
-            "status": "processing",
+            "status": StatusValue.PROCESSING,
         }
-    
+
     return classify_llm
 ```
 
@@ -293,15 +293,15 @@ START → ingest_events → classify_llm ──→ parse_findings → report_fin
 def route_after_classify_llm(
     state: ClusterAgentState,
 ) -> Literal["tool_node", "parse_findings", "__end__"]:
-    if state.get("status") == "error":
+    if state.status == StatusValue.ERROR:
         return "__end__"
-    
-    messages = state.get("messages", [])
+
+    messages = state.messages
     if messages:
         last = messages[-1]
         if isinstance(last, AIMessage) and getattr(last, "tool_calls", None):
             return "tool_node"  # LLM wants to call tools
-    
+
     return "parse_findings"  # LLM is done, parse the answer
 ```
 
@@ -325,26 +325,26 @@ The `add_messages` reducer appends these to the conversation. The next time `cla
 
 ## Parsing the final answer
 
-When the LLM is done (no more tool calls), the router sends it to `parse_findings`:
+When the LLM is done (no more tool calls), the router sends it to `parse_findings`. Like all nodes, state fields are read as attributes:
 
 ```python
 def _parse_llm_findings(state: ClusterAgentState) -> dict:
-    cluster_id = state.get("cluster_id", "unknown")
-    messages = state.get("messages", [])
-    trigger = state.get("trigger_event")
-    
+    cluster_id = state.cluster_id
+    messages = state.messages
+    trigger = state.trigger_event
+
     clear_tool_state()  # Clean up
-    
+
     # Find the last AI message
     last_ai = None
     for msg in reversed(messages):
         if isinstance(msg, AIMessage) and msg.content:
             last_ai = msg
             break
-    
+
     if last_ai is None:
-        return {"status": "complete", "anomalies": []}
-    
+        return {"status": StatusValue.COMPLETED, "anomalies": []}
+
     # Try to parse JSON from the LLM response
     try:
         content = last_ai.content.strip()
@@ -362,26 +362,25 @@ def _parse_llm_findings(state: ClusterAgentState) -> dict:
             "confidence": 0.3,
             "summary": last_ai.content[:200],
         }
-    
+
     findings: list[AnomalyFinding] = []
     if parsed.get("anomaly_detected", False):
-        findings.append({
-            "finding_id": str(uuid4()),
-            "cluster_id": cluster_id,
-            "anomaly_type": parsed.get("anomaly_type", "unknown"),
-            "affected_sensors": parsed.get("affected_sensors", []),
-            "confidence": float(parsed.get("confidence", 0.5)),
-            "summary": parsed.get("summary", "LLM detected anomaly"),
-            "raw_context": {
+        findings.append(AnomalyFinding(
+            cluster_id=cluster_id,
+            anomaly_type=parsed.get("anomaly_type", "unknown"),
+            affected_sensors=parsed.get("affected_sensors", []),
+            confidence=float(parsed.get("confidence", 0.5)),
+            summary=parsed.get("summary", "LLM detected anomaly"),
+            raw_context={
                 "trigger_event_id": trigger.event_id if trigger else None,
-                "event_count_in_window": len(state.get("sensor_events", [])),
+                "event_count_in_window": len(state.sensor_events),
                 "llm_response": last_ai.content[:500],
             },
-        })
-    
+        ))
+
     return {
         "anomalies": findings,
-        "status": "complete",
+        "status": StatusValue.COMPLETED,
     }
 ```
 
@@ -390,41 +389,61 @@ This node:
 2. Tries to parse it as JSON
 3. Handles markdown code fences (LLMs sometimes wrap JSON in ` ```json ... ``` `)
 4. Falls back to a degraded finding if parsing fails
-5. Converts the parsed JSON into an `AnomalyFinding` dict
-6. Returns `{"anomalies": [finding], "status": "complete"}`
+5. Converts the parsed JSON into an `AnomalyFinding` Pydantic model (not a dict — `finding_id` defaults via `Field(default_factory=...)`)
+6. Returns `{"anomalies": [finding], "status": StatusValue.COMPLETED}`
 
 The finding structure is the same as in stub mode. The only difference is the values come from LLM reasoning instead of hardcoded stubs.
 
 ---
 
-## Building the LLM graph
+## Modifying the builder
 
-The `build_cluster_agent_graph()` function has two branches:
+The `build_cluster_agent_graph()` function from Session 2 only accepted `store`. This session adds the `llm` parameter and a conditional branch:
 
 ```python
-if llm is not None:
-    # LLM mode
-    llm_with_tools = llm.bind_tools(SENSOR_TOOLS)
-    classify_llm_node = _make_classify_llm_node(llm_with_tools)
-    
-    builder.add_node("classify", classify_llm_node)
-    builder.add_node("tool_node", ToolNode(SENSOR_TOOLS))
-    builder.add_node("parse_findings", _parse_llm_findings)
-    
-    builder.add_edge("ingest_events", "classify")
-    builder.add_conditional_edges("classify", route_after_classify_llm)
-    builder.add_edge("tool_node", "classify")  # ← THE CYCLE
-    builder.add_edge("parse_findings", "report_findings")
-else:
-    # Stub mode (Session 06)
-    builder.add_node("classify", classify)
-    builder.add_edge("ingest_events", "classify")
-    builder.add_conditional_edges("classify", route_after_classify)
+def build_cluster_agent_graph(
+    llm: Optional[BaseChatModel] = None,
+    store: Optional[BaseStore] = None,
+):
+    builder = StateGraph(ClusterAgentState)
+
+    builder.add_node("ingest_events", ingest_events)
+    builder.add_node("report_findings", report_findings)
+    builder.add_edge(START, "ingest_events")
+
+    if llm is not None:
+        # LLM mode: classify_llm → tool_node loop → parse_findings
+        llm_with_tools = llm.bind_tools(SENSOR_TOOLS)
+        classify_llm_node = _make_classify_llm_node(llm_with_tools)
+
+        builder.add_node("classify", classify_llm_node)
+        builder.add_node("tool_node", ToolNode(SENSOR_TOOLS))
+        builder.add_node("parse_findings", _parse_llm_findings)
+
+        builder.add_edge("ingest_events", "classify")
+        builder.add_conditional_edges("classify", route_after_classify_llm)
+        builder.add_edge("tool_node", "classify")  # ← THE CYCLE
+        builder.add_edge("parse_findings", "report_findings")
+
+        logger.info("ClusterAgent subgraph compiled (LLM mode)")
+    else:
+        # Stub mode: deterministic classify (Session 2)
+        builder.add_node("classify", classify)
+        builder.add_edge("ingest_events", "classify")
+        builder.add_conditional_edges("classify", route_after_classify)
+
+        logger.info("ClusterAgent subgraph compiled (stub mode)")
+
+    builder.add_edge("report_findings", END)
+    compiled = builder.compile(store=store)
+    return compiled
 ```
 
 **bind_tools():** This is the LangChain method that attaches tool schemas to the LLM. After binding, when you invoke the LLM, it knows it can produce `tool_calls` in its response.
 
 **The cycle edge:** `builder.add_edge("tool_node", "classify")` creates the loop. After the tool node runs, control goes **back** to classify_llm, not forward to the next node. This is how the ReAct loop works.
+
+**Stub mode stays intact:** Passing `llm=None` (or omitting it) still gives you the Session 2 stub graph. Tests that don't need an LLM continue to use `build_cluster_agent_graph()` with no arguments.
 
 ---
 
@@ -434,7 +453,8 @@ Here's a complete script that invokes the LLM graph:
 
 ```python
 from langchain_openai import ChatOpenAI
-from agents.cluster.graph import build_cluster_agent_graph
+from agents.cluster.cluster_graph import build_cluster_agent_graph
+from agents.cluster.state import ClusterAgentState
 from transport.schemas import SensorEvent
 
 # Build the graph (LLM mode)
@@ -470,31 +490,27 @@ events = [
 ]
 
 # Invoke the graph
-result = graph.invoke({
-    "cluster_id": "cluster-north",
-    "workflow_id": "test-llm-1",
-    "sensor_events": events,
-    "trigger_event": events[-1],
-    "messages": [],
-    "anomalies": [],
-    "status": "idle",
-    "error_message": None,
-})
+result = graph.invoke(ClusterAgentState(
+    cluster_id="cluster-north",
+    workflow_id="test-llm-1",
+    sensor_events=events,
+    trigger_event=events[-1],
+))
 
 # Inspect the result
 print(f"Status: {result['status']}")
 print(f"Messages exchanged: {len(result['messages'])}")
 print(f"Findings: {len(result['anomalies'])}")
 for f in result["anomalies"]:
-    print(f"\n  [{f['anomaly_type']}] conf={f['confidence']:.2f}")
-    print(f"  Summary: {f['summary']}")
-    print(f"  Affected sensors: {f['affected_sensors']}")
+    print(f"\n  [{f.anomaly_type}] conf={f.confidence:.2f}")
+    print(f"  Summary: {f.summary}")
+    print(f"  Affected sensors: {f.affected_sensors}")
 ```
 
 You should see output like:
 
 ```
-Status: complete
+Status: completed
 Messages exchanged: 6
 Findings: 1
 
@@ -511,6 +527,8 @@ The LLM:
 
 The message count (6) includes: system message, user message, AI message with tool calls, 3 tool messages, final AI message with JSON.
 
+Note: `result["anomalies"][0]` returns a Pydantic `AnomalyFinding` object, so use attribute access (`f.anomaly_type`, `f.confidence`). `result["status"]` returns the `StatusValue` string (`"completed"`).
+
 ---
 
 ## What you learned: LLM + Tools in LangGraph
@@ -525,11 +543,11 @@ This session introduced the LLM integration patterns:
 
 **4. ReAct loop** — cycle between LLM node and tool node. LLM calls tools, sees results, calls more tools or produces final answer.
 
-**5. Conditional routing** — router checks for `tool_calls` to decide whether to loop or exit.
+**5. Conditional routing** — router checks `state.status` (StrEnum) and `tool_calls` presence to decide whether to loop or exit.
 
 **6. Module-level state holder** — tools read from a shared state holder set before the LLM call, avoiding the need to pass full LangGraph state into each tool.
 
-The graph structure from Session 06 (state schema, node signatures, partial updates, reducers) stays the same. The only change is swapping the stub classify node for an LLM + ToolNode ReAct loop. That's the power of the abstraction — you can swap implementations without changing the interface.
+The graph structure from Session 2 (state schema, node signatures, partial updates, reducers) stays the same. The only change is swapping the stub classify node for an LLM + ToolNode ReAct loop. That's the power of the abstraction — you can swap implementations without changing the interface.
 
 ---
 
@@ -548,8 +566,8 @@ All tests should pass. Key ones to look for:
 
 ## Key files
 
-- `src/tools/sensor_tools.py` — 4 `@tool` functions: `get_recent_readings`, `get_sensor_summary`, `check_threshold`, `get_cluster_status`; module-level state holder
-- `src/agents/cluster/graph.py` — `_make_classify_llm_node`, `route_after_classify_llm`, `_parse_llm_findings`, LLM mode branch in `build_cluster_agent_graph()`
+- `tools/sensor_tools.py` — 4 `@tool` functions: `get_recent_readings`, `get_sensor_summary`, `check_threshold`, `get_cluster_status`; module-level state holder
+- `agents/cluster/cluster_graph.py` — `_make_classify_llm_node`, `route_after_classify_llm`, `_parse_llm_findings`, LLM mode branch in `build_cluster_agent_graph()`
 
 ---
 

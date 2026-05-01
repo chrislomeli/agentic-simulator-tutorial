@@ -202,6 +202,7 @@ You can copy it from the tutorial repo or create your own. The easiest approach:
 (note: you must have added the remote tutorial repository and fetched it)
 ```bash
 git show tutorial/main:pyproject.toml > pyproject.toml
+git show tutorial/main:pyrightconfig.json > pyrightconfig.json
 git show tutorial/main:.gitignore > .gitignore
 ```
 

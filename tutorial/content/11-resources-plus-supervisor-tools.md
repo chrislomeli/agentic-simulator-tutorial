@@ -23,8 +23,8 @@ uv venv && source .venv/bin/activate
 uv pip install -e ".[llm]" --group dev
 git remote add tutorial https://github.com/chrislomeli/agentic-world-simulator.git
 git fetch tutorial
-git checkout tutorial/main -- src/world/ src/domains/ src/sensors/ src/transport/ src/bridge/ src/resources/ src/config.py tests/
-git checkout tutorial/main -- src/agents/ src/tools/
+git checkout tutorial/main -- world/ domains/ sensors/ transport/ bridge/ resources/ config.py tests/
+git checkout tutorial/main -- agents/ tools/
 pytest tests/agents/test_supervisor.py tests/resources/ -q   # should pass before you start
 ```
 
@@ -43,8 +43,8 @@ pytest tests/agents/test_supervisor.py tests/resources/ -q   # should pass befor
 
 | File | Change | What it contains |
 |------|--------|-----------------|
-| `src/tools/resource_tools.py` | **Create** | 4 `@tool` functions: `get_resource_summary`, `get_resources_by_cluster`, `get_resources_by_type`, `check_preparedness` |
-| `src/agents/supervisor/graph.py` | **Modify** | Additive tool composition in `build_supervisor_graph()` — add `RESOURCE_TOOLS` when `resource_inventory` is provided |
+| `tools/resource_tools.py` | **Create** | 4 `@tool` functions: `get_resource_summary`, `get_resources_by_cluster`, `get_resources_by_type`, `check_preparedness` |
+| `agents/supervisor/graph.py` | **Modify** | Additive tool composition in `build_supervisor_graph()` — add `RESOURCE_TOOLS` when `resource_inventory` is provided |
 
 When you're done:
 
@@ -448,10 +448,10 @@ Key tests to look for:
 
 ## Key files
 
-- `src/tools/resource_tools.py` — 4 resource tools: `get_resource_summary`, `get_resources_by_cluster`, `get_resources_by_type`, `check_preparedness`
-- `src/agents/supervisor/graph.py` — `build_supervisor_graph()` with additive tool composition
-- `src/tools/supervisor_tools.py` — `_SupervisorToolState` (shared by all tool sets)
-- `src/domains/wildfire/nwcg_resources.py` — NWCG intensity thresholds used by fire-aware gap checks
+- `tools/resource_tools.py` — 4 resource tools: `get_resource_summary`, `get_resources_by_cluster`, `get_resources_by_type`, `check_preparedness`
+- `agents/supervisor/graph.py` — `build_supervisor_graph()` with additive tool composition
+- `tools/supervisor_tools.py` — `_SupervisorToolState` (shared by all tool sets)
+- `domains/wildfire/nwcg_resources.py` — NWCG intensity thresholds used by fire-aware gap checks
 
 ---
 

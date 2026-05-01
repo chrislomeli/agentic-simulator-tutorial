@@ -23,7 +23,7 @@ uv venv && source .venv/bin/activate
 uv pip install -e ".[llm]" --group dev
 git remote add tutorial https://github.com/chrislomeli/agentic-world-simulator.git
 git fetch tutorial
-git checkout tutorial/main -- src/ tests/
+git checkout tutorial/main -- / tests/
 pytest tests/ -q   # everything should pass before you start
 ```
 
@@ -386,9 +386,9 @@ In stub mode, the supervisor won't detect resource gaps (expected — no LLM to 
 
 ## Key files
 
-- `src/resources/inventory.py` — `reduce_resources()`, `disable_resources()`, `reset_all()`
-- `src/world/sensor_inventory.py` — `thin_sensors()`, `inject_failures()`
-- `src/tools/resource_tools.py` — `check_preparedness()` (gap detection)
+- `resources/inventory.py` — `reduce_resources()`, `disable_resources()`, `reset_all()`
+- `world/sensor_inventory.py` — `thin_sensors()`, `inject_failures()`
+- `tools/resource_tools.py` — `check_preparedness()` (gap detection)
 
 ---
 

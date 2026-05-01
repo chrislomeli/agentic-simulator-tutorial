@@ -23,8 +23,8 @@ uv venv && source .venv/bin/activate
 uv pip install -e ".[llm]" --group dev
 git remote add tutorial https://github.com/chrislomeli/agentic-world-simulator.git
 git fetch tutorial
-git checkout tutorial/main -- src/world/ src/domains/ src/sensors/ src/transport/ src/bridge/ src/resources/ src/config.py tests/
-git checkout tutorial/main -- src/agents/ src/tools/
+git checkout tutorial/main -- world/ domains/ sensors/ transport/ bridge/ resources/ config.py tests/
+git checkout tutorial/main -- agents/ tools/
 pytest tests/ -q --ignore=tests/agents/test_supervisor.py   # should pass before you start
 ```
 
@@ -396,9 +396,9 @@ You should see events enqueued, agent invocations, and findings collected. If an
 
 ## Key files
 
-- `src/sensors/publisher.py` — `SensorPublisher`: async tick loop, drives sensors, enqueues events
-- `src/bridge/consumer.py` — `EventBridgeConsumer`: async read loop, batches events, invokes agent, collects findings
-- `src/agents/cluster/graph.py` — `build_cluster_agent_graph()`: compiles the cluster agent (stub or LLM mode)
+- `sensors/publisher.py` — `SensorPublisher`: async tick loop, drives sensors, enqueues events
+- `bridge/consumer.py` — `EventBridgeConsumer`: async read loop, batches events, invokes agent, collects findings
+- `agents/cluster/graph.py` — `build_cluster_agent_graph()`: compiles the cluster agent (stub or LLM mode)
 
 ---
 
