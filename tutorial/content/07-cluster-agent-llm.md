@@ -24,7 +24,7 @@ uv pip install -e ".[llm]" --group dev
 git remote add tutorial https://github.com/chrislomeli/agentic-world-simulator.git
 git fetch tutorial
 git checkout tutorial/main -- world/ domains/ sensors/ transport/ bridge/ resources/ config.py tests/
-git checkout tutorial/main -- agents/cluster/state.py agents/cluster/cluster_graph.py
+git checkout tutorial/main -- agents/cluster/state.py agents/cluster/graph.py
 pytest tests/agents/test_cluster.py -q   # should pass before you start
 ```
 
@@ -453,7 +453,7 @@ Here's a complete script that invokes the LLM graph:
 
 ```python
 from langchain_openai import ChatOpenAI
-from agents.cluster.cluster_graph import build_cluster_agent_graph
+from agents.cluster.graph import build_cluster_agent_graph
 from agents.cluster.state import ClusterAgentState
 from transport.schemas import SensorEvent
 

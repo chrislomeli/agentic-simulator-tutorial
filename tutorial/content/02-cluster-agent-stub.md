@@ -24,7 +24,7 @@ git commit
 ```bash
  3 files changed, 423 insertions(+)
  create mode 100644 main.py
- create mode 100644 src/agents/cluster/cluster_graph.py
+ create mode 100644 src/agents/cluster/graph.py
  create mode 100644 src/agents/cluster/state.py
 
 ```
@@ -632,8 +632,8 @@ Three nodes, three responsibilities:
 
 ### On where node logic lives (for readers who ask)
 
-- All node functions are in `cluster_graph.py`. In production you'd probably split into
-  `nodes.py` and `cluster_graph.py` (topology only). For a tutorial, colocation is
+- All node functions are in `graph.py`. In production you'd probably split into
+  `nodes.py` and `graph.py` (topology only). For a tutorial, colocation is
   intentional — you can read the whole graph without jumping files.
 
 ### On what the cluster agent does NOT do

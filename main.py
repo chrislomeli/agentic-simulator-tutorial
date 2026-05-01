@@ -13,14 +13,20 @@ Run from the project root:
 This script depends on the editable install adding `src/` to the Python path.
 If you see ImportError, run: uv pip install -e ".[llm]" --group dev
 """
-
 import logging
 
-from agents.cluster.cluster_graph import build_cluster_agent_graph
+# configure_logging() must come before all project imports so that
+# module-level loggers (e.g. the compiled cluster_agent_graph) are
+# captured by structlog from the first record onward.
+from logging_config import configure_logging
+configure_logging(level=logging.INFO)
+
+from agents.cluster.graph import build_cluster_agent_graph
 from agents.cluster.state import ClusterAgentState
 from transport.schemas import SensorEvent
 
 PRINT_GRAPH = True
+
 
 def demo_cluster_agent() -> None:
     print("=== Cluster agent demo ===")
@@ -55,10 +61,6 @@ def demo_cluster_agent() -> None:
 
 
 def main() -> None:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    )
     demo_cluster_agent()
 
 

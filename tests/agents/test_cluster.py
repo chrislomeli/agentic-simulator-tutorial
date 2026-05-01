@@ -8,13 +8,13 @@ from agents.cluster.state import (
 )
 from langgraph.store.memory import InMemoryStore
 
-from agents.cluster.cluster_graph import (
+from agents.cluster.nodes import (
     ingest_events,
     classify,
-    report_findings,
+    make_report_findings,
     route_after_classify,
-    build_cluster_agent_graph,
 )
+from agents.cluster.graph import build_cluster_agent_graph
 from transport import SensorEvent
 
 
@@ -104,7 +104,7 @@ class TestClassify:
     def test_produces_stub_finding(self):
         state = _make_state()
         result = classify(state)
-        assert result["status"] == StatusValue.COMPLETED
+        assert result["status"] == StatusValue.PROCESSING
         assert len(result["anomalies"]) == 1
         finding = result["anomalies"][0]
         assert finding.anomaly_type == "stub_placeholder"
@@ -135,6 +135,7 @@ class TestReportFindings:
             summary="test",
             raw_context={},
         )])
+        report_findings = make_report_findings()
         result = report_findings(state)
         assert result == {}
 
@@ -150,7 +151,8 @@ class TestReportFindings:
             raw_context={},
         )
         state = _make_state(cluster_id="cluster-north", anomalies=[finding])
-        report_findings(state, store=store)
+        report_findings = make_report_findings(store=store)
+        report_findings(state)
 
         items = store.search(("incidents", "cluster-north"))
         assert len(items) == 1
@@ -164,13 +166,15 @@ class TestReportFindings:
             anomaly_type="test", affected_sensors=[],
             confidence=0.5, summary="test", raw_context={},
         )])
-        result = report_findings(state, store=None)
+        report_findings = make_report_findings(store=None)
+        result = report_findings(state)
         assert result == {}
 
     def test_empty_anomalies_writes_nothing(self):
         store = InMemoryStore()
         state = _make_state(cluster_id="cluster-north", anomalies=[])
-        report_findings(state, store=store)
+        report_findings = make_report_findings(store=store)
+        report_findings(state)
         items = store.search(("incidents", "cluster-north"))
         assert len(items) == 0
 
