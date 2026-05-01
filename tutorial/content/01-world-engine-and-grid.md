@@ -37,18 +37,16 @@ git remote add tutorial https://github.com/chrislomeli/agentic-world-simulator.g
 git fetch tutorial
 ```
 
-**Copy everything:**
+**Copy the infrastructure code and its tests:**
 
 ```bash
 git checkout tutorial/main -- src/world/
 git checkout tutorial/main -- src/domains/
 git checkout tutorial/main -- src/sensors/
 git checkout tutorial/main -- src/transport/
-git checkout tutorial/main -- src/bridge/
 git checkout tutorial/main -- src/resources/
-git checkout tutorial/main -- src/tools/
 git checkout tutorial/main -- src/config.py
-git checkout tutorial/main -- tests/
+git checkout tutorial/main -- tests/world/ tests/domains/ tests/sensors/ tests/transport/ tests/resources/
 ```
 
 Install and verify:
@@ -60,7 +58,7 @@ pytest tests/world/ tests/domains/ tests/sensors/ tests/transport/ -v
 
 All these tests should pass. If anything fails, check that your virtual environment is active and dependencies are installed.
 
-> **Note:** The `tests/bridge/` and `tests/resources/` directories contain tests that depend on agent and tool code you'll build in later sessions. They won't pass yet — that's expected. The tests above cover all the infrastructure you just copied.
+> **Note:** Other directories — `src/bridge/`, `src/tools/`, and `src/agents/` — and their tests will be introduced in later sessions when they're actually used. We're keeping the copy list lean so you only have working code at each stage.
 
 ---
 

@@ -66,71 +66,16 @@ uv 0.4.x (or later)
 
 ## Step 2: Set up your own repo with tutorial reference
 
-
-
-
 Follow this workflow so you have your own repo while keeping the tutorial code accessible for reference and comparison.
 
-**Step 2a - add a .gitignore file**
-```gitignore
-# Python
-.venv/
-__pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-*.egg
-*.egg-info/
-dist/
-build/
-*.so
-*.dylib
-
-# Testing & coverage
-.pytest_cache/
-.coverage
-.coverage.*
-coverage.xml
-htmlcov/
-.tox/
-.nox/
-
-# Type checking
-.mypy_cache/
-.pyright/
-.ruff_cache/
-
-# Environment & secrets
-.env
-.env.*
-!.env.example
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Editors & IDEs
-.idea/
-.vscode/
-*.swp
-*.swo
-
-# Claude Code
-.claude/
-
-# uv
-.python-version
-```
-
-
-**Step 2b — Create your own GitHub repo**
+**Step 2a — Create your own GitHub repo**
 
 On GitHub (or your Git platform):
 1. Create a new repository (e.g., `wildfire-project`)
 2. Initialize with a README (optional)
 3. Copy the HTTPS clone URL
 
-**Step 2c — Clone your repo locally**
+**Step 2b — Clone your repo locally**
 
 ```bash
 git clone <your-repo-url>
@@ -145,7 +90,7 @@ cd agentic-tutorial
 
 
 
-**Step 2d — Add the tutorial repo as a remote**
+**Step 2c — Add the tutorial repo as a remote**
 
 ```bash
 git remote add tutorial https://github.com/chrislomeli/agentic-world-simulator.git
@@ -156,7 +101,7 @@ Now you have two remotes:
 - `origin` — your own repo (where you push your work)
 - `tutorial` — the reference solution (for comparison and guidance)
 
-**Step 2e — (Optional) Check out tutorial reference branches**
+**Step 2d — (Optional) Check out tutorial reference branches**
 
 Each session has a tag/branch you can reference:
 
@@ -168,7 +113,7 @@ git branch -r --list "tutorial/*"
 git checkout tutorial/session-02
 ```
 
-**Step 2f — Compare and copy**
+**Step 2e — Compare and copy**
 
 Now you can:
 
@@ -202,6 +147,7 @@ You can copy it from the tutorial repo or create your own. The easiest approach:
 (note: you must have added the remote tutorial repository and fetched it)
 ```bash
 git show tutorial/main:pyproject.toml > pyproject.toml
+git show tutorial/main:pyrightconfig.json > pyrightconfig.json
 git show tutorial/main:.gitignore > .gitignore
 ```
 
@@ -380,7 +326,7 @@ if __name__ == "__main__":
 Run it:
 
 ```bash
-python verify_api_key.py
+python verify_setup.py
 ```
 
 Expected output:
