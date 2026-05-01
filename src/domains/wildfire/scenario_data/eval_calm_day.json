@@ -1,0 +1,102 @@
+{
+  "name": "eval-calm-day",
+  "description": "Same grid and sensors as eval_obvious_fire but mild weather, no ignition. The scoring filter should NOT trigger. If anything reaches the agent, it should report normal conditions.",
+
+  "dimensions": {"rows": 10, "cols": 10, "layers": 1},
+
+  "defaults": {
+    "terrain": "FOREST",
+    "vegetation": 0.8,
+    "fuel_moisture": 0.25,
+    "slope": 0.0
+  },
+
+  "environment": {
+    "temperature_c": 25.0,
+    "humidity_pct": 55.0,
+    "wind_speed_mps": 3.0,
+    "wind_direction_deg": 180.0,
+    "pressure_hpa": 1015.0
+  },
+
+  "physics": {
+    "use_rothermel": true,
+    "cell_size_ft": 200.0,
+    "time_step_min": 5.0,
+    "burn_duration_ticks": 5
+  },
+
+  "cells": {
+    "__comment_water": "Small lake NW corner",
+    "0,0,0": {"terrain": "WATER", "vegetation": 0.0},
+    "0,1,0": {"terrain": "WATER", "vegetation": 0.0},
+    "1,0,0": {"terrain": "WATER", "vegetation": 0.0},
+
+    "__comment_rock": "Rock ridge row 3",
+    "3,0,0": {"terrain": "ROCK", "vegetation": 0.0},
+    "3,1,0": {"terrain": "ROCK", "vegetation": 0.0},
+    "3,2,0": {"terrain": "ROCK", "vegetation": 0.0},
+    "3,3,0": {"terrain": "ROCK", "vegetation": 0.0},
+
+    "__comment_grassland": "Grassland patch — same layout, but no fire risk today",
+    "4,4,0": {"terrain": "GRASSLAND", "vegetation": 0.6, "fuel_moisture": 0.30},
+    "4,5,0": {"terrain": "GRASSLAND", "vegetation": 0.6, "fuel_moisture": 0.30},
+    "4,6,0": {"terrain": "GRASSLAND", "vegetation": 0.6, "fuel_moisture": 0.30},
+    "5,4,0": {"terrain": "GRASSLAND", "vegetation": 0.6, "fuel_moisture": 0.30},
+    "5,5,0": {"terrain": "GRASSLAND", "vegetation": 0.6, "fuel_moisture": 0.30},
+    "5,6,0": {"terrain": "GRASSLAND", "vegetation": 0.6, "fuel_moisture": 0.30},
+    "6,4,0": {"terrain": "GRASSLAND", "vegetation": 0.6, "fuel_moisture": 0.30},
+    "6,5,0": {"terrain": "GRASSLAND", "vegetation": 0.6, "fuel_moisture": 0.30},
+    "6,6,0": {"terrain": "GRASSLAND", "vegetation": 0.6, "fuel_moisture": 0.30},
+
+    "__comment_sensors": "Same sensor layout as the fire scenarios",
+    "4,5,0": {"terrain": "GRASSLAND", "vegetation": 0.6, "fuel_moisture": 0.30,
+              "sensors": [{"id": "temp-1", "type": "temperature", "cluster": "cluster-alpha", "noise_std": 0.5}]},
+    "6,5,0": {"sensors": [{"id": "temp-2", "type": "temperature", "cluster": "cluster-alpha", "noise_std": 0.5}]},
+    "5,4,0": {"terrain": "GRASSLAND", "vegetation": 0.6, "fuel_moisture": 0.30,
+              "sensors": [{"id": "hum-1",  "type": "humidity",    "cluster": "cluster-alpha", "noise_std": 1.0}]},
+    "5,6,0": {"terrain": "GRASSLAND", "vegetation": 0.6, "fuel_moisture": 0.30,
+              "sensors": [{"id": "wind-1", "type": "wind",        "cluster": "cluster-alpha"}]},
+    "5,5,0": {"terrain": "GRASSLAND", "vegetation": 0.6, "fuel_moisture": 0.30,
+              "sensors": [{"id": "smoke-1","type": "smoke",       "cluster": "cluster-alpha", "noise_std": 1.0}]},
+    "4,4,0": {"terrain": "GRASSLAND", "vegetation": 0.6, "fuel_moisture": 0.30,
+              "sensors": [{"id": "temp-3", "type": "temperature", "cluster": "cluster-alpha", "noise_std": 0.5}]},
+
+    "__comment_resources": "Resources close by — same as eval_obvious_fire",
+    "7,5,0": {
+      "resources": [{
+        "id": "engine-1", "type": "engine", "cluster": "cluster-alpha",
+        "capacity": 500.0, "available": 500.0, "mobile": true,
+        "metadata": {"unit": "gallons"}
+      }]
+    },
+    "7,4,0": {
+      "resources": [{
+        "id": "engine-2", "type": "engine", "cluster": "cluster-alpha",
+        "capacity": 500.0, "available": 500.0, "mobile": true,
+        "metadata": {"unit": "gallons"}
+      }]
+    },
+    "7,6,0": {
+      "resources": [{
+        "id": "crew-1", "type": "crew", "cluster": "cluster-alpha",
+        "capacity": 1.0, "available": 1.0, "mobile": true,
+        "metadata": {"unit": "20-person"}
+      }]
+    },
+    "8,5,0": {
+      "resources": [{
+        "id": "crew-2", "type": "crew", "cluster": "cluster-alpha",
+        "capacity": 1.0, "available": 1.0, "mobile": true,
+        "metadata": {"unit": "20-person"}
+      }]
+    },
+    "8,4,0": {
+      "resources": [{
+        "id": "helicopter-1", "type": "helicopter", "cluster": "cluster-alpha",
+        "capacity": 700.0, "available": 700.0, "mobile": true,
+        "metadata": {"unit": "gallons"}
+      }]
+    }
+  }
+}

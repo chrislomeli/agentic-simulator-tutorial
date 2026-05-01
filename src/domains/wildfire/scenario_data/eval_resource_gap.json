@@ -1,0 +1,106 @@
+{
+  "name": "eval-resource-gap",
+  "description": "Same hotspot as eval_obvious_fire but all resources are in the far NE corner. The agent SHOULD detect fire risk AND flag that resources are too far away to meet SLA.",
+
+  "dimensions": {"rows": 10, "cols": 10, "layers": 1},
+
+  "defaults": {
+    "terrain": "FOREST",
+    "vegetation": 0.8,
+    "fuel_moisture": 0.25,
+    "slope": 0.0
+  },
+
+  "environment": {
+    "temperature_c": 42.0,
+    "humidity_pct": 10.0,
+    "wind_speed_mps": 12.0,
+    "wind_direction_deg": 225.0,
+    "pressure_hpa": 1008.0
+  },
+
+  "physics": {
+    "use_rothermel": true,
+    "cell_size_ft": 200.0,
+    "time_step_min": 5.0,
+    "burn_duration_ticks": 5
+  },
+
+  "ignition": [
+    {"row": 5, "col": 5, "intensity": 0.8}
+  ],
+
+  "cells": {
+    "__comment_water": "Small lake NW corner",
+    "0,0,0": {"terrain": "WATER", "vegetation": 0.0},
+    "0,1,0": {"terrain": "WATER", "vegetation": 0.0},
+    "1,0,0": {"terrain": "WATER", "vegetation": 0.0},
+
+    "__comment_rock": "Rock ridge row 3",
+    "3,0,0": {"terrain": "ROCK", "vegetation": 0.0},
+    "3,1,0": {"terrain": "ROCK", "vegetation": 0.0},
+    "3,2,0": {"terrain": "ROCK", "vegetation": 0.0},
+    "3,3,0": {"terrain": "ROCK", "vegetation": 0.0},
+
+    "__comment_grassland": "Grassland patch around the hotspot",
+    "4,4,0": {"terrain": "GRASSLAND", "vegetation": 0.6, "fuel_moisture": 0.10},
+    "4,5,0": {"terrain": "GRASSLAND", "vegetation": 0.6, "fuel_moisture": 0.10},
+    "4,6,0": {"terrain": "GRASSLAND", "vegetation": 0.6, "fuel_moisture": 0.10},
+    "5,4,0": {"terrain": "GRASSLAND", "vegetation": 0.6, "fuel_moisture": 0.10},
+    "5,5,0": {"terrain": "GRASSLAND", "vegetation": 0.6, "fuel_moisture": 0.08},
+    "5,6,0": {"terrain": "GRASSLAND", "vegetation": 0.6, "fuel_moisture": 0.10},
+    "6,4,0": {"terrain": "GRASSLAND", "vegetation": 0.6, "fuel_moisture": 0.10},
+    "6,5,0": {"terrain": "GRASSLAND", "vegetation": 0.6, "fuel_moisture": 0.10},
+    "6,6,0": {"terrain": "GRASSLAND", "vegetation": 0.6, "fuel_moisture": 0.10},
+
+    "__comment_sensors": "Same dense sensor cluster as eval_obvious_fire",
+    "4,5,0": {"terrain": "GRASSLAND", "vegetation": 0.6, "fuel_moisture": 0.10,
+              "sensors": [{"id": "temp-1", "type": "temperature", "cluster": "cluster-alpha", "noise_std": 0.5}]},
+    "6,5,0": {"sensors": [{"id": "temp-2", "type": "temperature", "cluster": "cluster-alpha", "noise_std": 0.5}]},
+    "5,4,0": {"terrain": "GRASSLAND", "vegetation": 0.6, "fuel_moisture": 0.10,
+              "sensors": [{"id": "hum-1",  "type": "humidity",    "cluster": "cluster-alpha", "noise_std": 1.0}]},
+    "5,6,0": {"terrain": "GRASSLAND", "vegetation": 0.6, "fuel_moisture": 0.10,
+              "sensors": [{"id": "wind-1", "type": "wind",        "cluster": "cluster-alpha"}]},
+    "5,5,0": {"terrain": "GRASSLAND", "vegetation": 0.6, "fuel_moisture": 0.08,
+              "sensors": [{"id": "smoke-1","type": "smoke",       "cluster": "cluster-alpha", "noise_std": 1.0}]},
+    "4,4,0": {"terrain": "GRASSLAND", "vegetation": 0.6, "fuel_moisture": 0.10,
+              "sensors": [{"id": "temp-3", "type": "temperature", "cluster": "cluster-alpha", "noise_std": 0.5}]},
+
+    "__comment_resources": "Resources in far NE corner — far from the fire at (5,5)",
+    "0,8,0": {
+      "resources": [{
+        "id": "engine-1", "type": "engine", "cluster": "cluster-alpha",
+        "capacity": 500.0, "available": 500.0, "mobile": true,
+        "metadata": {"unit": "gallons"}
+      }]
+    },
+    "0,9,0": {
+      "resources": [{
+        "id": "engine-2", "type": "engine", "cluster": "cluster-alpha",
+        "capacity": 500.0, "available": 500.0, "mobile": true,
+        "metadata": {"unit": "gallons"}
+      }]
+    },
+    "1,8,0": {
+      "resources": [{
+        "id": "crew-1", "type": "crew", "cluster": "cluster-alpha",
+        "capacity": 1.0, "available": 1.0, "mobile": true,
+        "metadata": {"unit": "20-person"}
+      }]
+    },
+    "1,9,0": {
+      "resources": [{
+        "id": "crew-2", "type": "crew", "cluster": "cluster-alpha",
+        "capacity": 1.0, "available": 1.0, "mobile": true,
+        "metadata": {"unit": "20-person"}
+      }]
+    },
+    "2,9,0": {
+      "resources": [{
+        "id": "helicopter-1", "type": "helicopter", "cluster": "cluster-alpha",
+        "capacity": 700.0, "available": 700.0, "mobile": true,
+        "metadata": {"unit": "gallons"}
+      }]
+    }
+  }
+}
