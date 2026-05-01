@@ -20,6 +20,7 @@ from agents.cluster.cluster_graph import build_cluster_agent_graph
 from agents.cluster.state import ClusterAgentState
 from transport.schemas import SensorEvent
 
+PRINT_GRAPH = True
 
 def demo_cluster_agent() -> None:
     print("=== Cluster agent demo ===")
@@ -32,6 +33,11 @@ def demo_cluster_agent() -> None:
     )
 
     graph = build_cluster_agent_graph()
+
+    if PRINT_GRAPH:
+        with open("graph.png", "wb") as f:
+            f.write(graph.get_graph().draw_mermaid_png())
+
     initial_state = ClusterAgentState(
         cluster_id="cluster-north",
         workflow_id="demo-run-1",
