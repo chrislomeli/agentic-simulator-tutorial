@@ -19,6 +19,32 @@ In this session the classification logic is a stub (hardcoded). Session 3 replac
 When something breaks in stub mode you know exactly which layer failed. Once the graph structure works, swapping the stub for an LLM is just changing one function.
 
 ---
+## Changes
+git commit
+```bash
+ 3 files changed, 423 insertions(+)
+ create mode 100644 main.py
+ create mode 100644 src/agents/cluster/graph.py
+ create mode 100644 src/agents/cluster/state.py
+
+```
+validate
+```bash
+> python main.py 
+
+=== Cluster agent demo ===
+2026-04-30 17:44:05,635 [INFO] agents.cluster.cluster_graph: ClusterAgent subgraph compiled (stub mode)
+2026-04-30 17:44:05,639 [INFO] agents.cluster.cluster_graph: ClusterAgent[cluster-north]:       NODE: ingest_events: ingesting event from source=temp-n1
+2026-04-30 17:44:05,639 [INFO] agents.cluster.cluster_graph: ClusterAgent[cluster-north]:       NODE classify: STUB (no LLM)
+2026-04-30 17:44:05,639 [INFO] agents.cluster.cluster_graph: ClusterAgent[cluster-north]        ROUTER: route_after_classify 
+2026-04-30 17:44:05,639 [INFO] agents.cluster.cluster_graph: ClusterAgent[cluster-north]        NODE: report_findings:  reporting 1 finding(s) to supervisor
+Status:   completed
+Findings: 1
+  - stub_placeholder (confidence=0.5)
+    [STUB] classify node not yet implemented for cluster cluster-north
+```
+
+---
 
 ## Setup
 
@@ -606,8 +632,8 @@ Three nodes, three responsibilities:
 
 ### On where node logic lives (for readers who ask)
 
-- All node functions are in `cluster_graph.py`. In production you'd probably split into
-  `nodes.py` and `cluster_graph.py` (topology only). For a tutorial, colocation is
+- All node functions are in `graph.py`. In production you'd probably split into
+  `nodes.py` and `graph.py` (topology only). For a tutorial, colocation is
   intentional — you can read the whole graph without jumping files.
 
 ### On what the cluster agent does NOT do
