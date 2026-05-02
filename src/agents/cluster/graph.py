@@ -23,7 +23,6 @@ without needing the supervisor running.
 """
 
 import logging
-from typing import Optional
 
 from langgraph.graph import END, START, StateGraph
 from langgraph.store.base import BaseStore
@@ -36,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 # ── Graph builder ─────────────────────────────────────────────────────────────
 
-def build_cluster_agent_graph(store: Optional[BaseStore] = None):
+def build_cluster_agent_graph(*, store: BaseStore | None = None):
     """
     Compile and return the cluster agent subgraph (stub mode).
 
@@ -66,8 +65,3 @@ def build_cluster_agent_graph(store: Optional[BaseStore] = None):
 
     compiled = builder.compile()
     return compiled
-
-
-# Module-level compiled graph (stub mode).
-# The graph is compiled once when the module is first imported.
-cluster_agent_graph = build_cluster_agent_graph()

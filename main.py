@@ -20,7 +20,7 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 
-from agents.cluster.graph import build_cluster_agent_graph, cluster_agent_graph
+from agents.cluster.graph import build_cluster_agent_graph
 from agents.cluster.state import ClusterAgentState
 from agents.supervisor.graph import build_supervisor_graph
 from agents.supervisor.state import SupervisorState
@@ -78,13 +78,14 @@ def demo_supervisor() -> None:
         payload={"celsius": 52.4},
     )
 
+    cluster_graph = build_cluster_agent_graph()
     graph = build_supervisor_graph()
 
     if PRINT_GRAPH:
         with open("supervisor_graph.png", "wb") as f:
             f.write(graph.get_graph().draw_mermaid_png())
         with open("cluster_graph.png", "wb") as f:
-            f.write(cluster_agent_graph.get_graph().draw_mermaid_png())
+            f.write(cluster_graph.get_graph().draw_mermaid_png())
 
     initial_state = SupervisorState(
         active_cluster_ids=["cluster-north", "cluster-south"],

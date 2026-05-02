@@ -38,13 +38,13 @@ Node responsibilities (skeleton — logic comes later)
 from __future__ import annotations
 
 import uuid
-from typing import Annotated, Any, Dict, List, Optional
+from typing import Annotated, Any
 
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field
 
-from agents.cluster.state import AnomalyFinding
+from agents.schemas import AnomalyFinding
 from agents.state_types import StatusValue
 
 
@@ -57,16 +57,16 @@ class ActuatorCommand(BaseModel):
     command_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     command_type: str
     cluster_id: str
-    payload: Dict[str, Any] = Field(default_factory=dict)
+    payload: dict[str, Any] = Field(default_factory=dict)
     priority: int = 3
 
 
 # ── Custom reducer for aggregating cluster findings ──────────────────────────
 
 def aggregate_findings(
-    existing: List[AnomalyFinding],
-    incoming: List[AnomalyFinding],
-) -> List[AnomalyFinding]:
+    existing: list[AnomalyFinding],
+    incoming: list[AnomalyFinding],
+) -> list[AnomalyFinding]:
     """
     Accumulate findings from parallel cluster agent invocations.
 
@@ -94,30 +94,30 @@ class SupervisorState(BaseModel):
 
     # ── Input ────────────────────────────────────────────────────────
     # Which clusters fan_out_to_clusters will target.
-    active_cluster_ids: List[str] = Field(default_factory=list)
+    active_cluster_ids: list[str] = Field(default_factory=list)
 
     # Events grouped by cluster_id. Passed in by the caller (event loop).
     # fan_out_to_clusters reads this to populate each cluster agent's
     # sensor_events before invoking it via Send.
-    events_by_cluster: Dict[str, List[Any]] = Field(default_factory=dict)
+    events_by_cluster: dict[str, list[Any]] = Field(default_factory=dict)
 
     # ── Aggregated findings (output of cluster fan-out) ──────────────
     # Populated by run_cluster_agent (one update per parallel invocation).
     # The aggregate_findings reducer merges results after the
     # synchronization barrier.
-    cluster_findings: Annotated[List[AnomalyFinding], aggregate_findings] = Field(
+    cluster_findings: Annotated[list[AnomalyFinding], aggregate_findings] = Field(
         default_factory=list
     )
 
     # ── LLM reasoning (used once an LLM is wired in) ─────────────────
-    messages: Annotated[List[BaseMessage], add_messages] = Field(default_factory=list)
+    messages: Annotated[list[BaseMessage], add_messages] = Field(default_factory=list)
 
     # ── Decision output ──────────────────────────────────────────────
-    pending_commands: List[ActuatorCommand] = Field(default_factory=list)
+    pending_commands: list[ActuatorCommand] = Field(default_factory=list)
 
     # ── Situation summary ────────────────────────────────────────────
-    situation_summary: Optional[str] = None
+    situation_summary: str | None = None
 
     # ── Control ──────────────────────────────────────────────────────
     status: StatusValue = Field(default=StatusValue.IDLE)
-    error_message: Optional[str] = None
+    error_message: str | None = None

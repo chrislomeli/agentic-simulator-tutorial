@@ -9,15 +9,18 @@ fan out, wait, assess, decide, dispatch. The graph builder
 
 Stub mode produces dummy data end-to-end so prompts, observers, and
 real logic can be layered on later without restructuring the graph.
+
+Nodes that depend on long-lived resources (the compiled cluster
+subgraph, a LangGraph BaseStore) are exposed as make_* factories so
+the graph builder can thread dependencies in at compile time.
 """
 
 import logging
-from typing import List, Optional
 
+from langgraph.graph.state import CompiledStateGraph
 from langgraph.store.base import BaseStore
 from langgraph.types import Send
 
-from agents.cluster.graph import cluster_agent_graph
 from agents.cluster.state import ClusterAgentState
 from agents.routing import _route_base
 from agents.state_types import StatusValue
@@ -28,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 # ── Conditional edge: dynamic fan-out ────────────────────────────────────────
 
-def fan_out_to_clusters(state: SupervisorState) -> List[Send]:
+def fan_out_to_clusters(state: SupervisorState) -> list[Send]:
     """
     Dynamic fan-out — one Send per active cluster.
 
@@ -51,7 +54,7 @@ def fan_out_to_clusters(state: SupervisorState) -> List[Send]:
         cluster_ids,
     )
 
-    sends: List[Send] = []
+    sends: list[Send] = []
     for cluster_id in cluster_ids:
         events = events_by_cluster.get(cluster_id, [])
         trigger = events[-1] if events else None
@@ -69,22 +72,23 @@ def fan_out_to_clusters(state: SupervisorState) -> List[Send]:
 
 # ── Wrapper node: invokes the cluster subgraph ───────────────────────────────
 
-def run_cluster_agent(state: ClusterAgentState) -> dict:
+def make_run_cluster_agent(cluster_graph: CompiledStateGraph):
+    """Factory that closes over the compiled cluster subgraph.
+
+    The supervisor invokes the cluster subgraph once per Send emitted
+    by fan_out_to_clusters and lifts its anomalies up into the
+    supervisor's cluster_findings field via the aggregate_findings reducer.
     """
-    Wrapper node — runs once per Send() emitted by fan_out_to_clusters.
+    def run_cluster_agent(state: ClusterAgentState) -> dict:
+        cluster_id = state.cluster_id
+        logger.info("Supervisor invoking cluster agent for cluster=%s", cluster_id)
 
-    Receives a ClusterAgentState (NOT SupervisorState) because that is
-    what fan_out passed via Send. Invokes the compiled cluster subgraph
-    and lifts its anomalies up into the supervisor's cluster_findings
-    field via the aggregate_findings reducer.
-    """
-    cluster_id = state.cluster_id
-    logger.info("Supervisor invoking cluster agent for cluster=%s", cluster_id)
+        result = cluster_graph.invoke(state)
+        anomalies = result.get("anomalies", [])
 
-    result = cluster_agent_graph.invoke(state)
-    anomalies = result.get("anomalies", [])
+        return {"cluster_findings": anomalies}
 
-    return {"cluster_findings": anomalies}
+    return run_cluster_agent
 
 
 # ── Stub nodes (the supervisor's own steps) ──────────────────────────────────
@@ -125,9 +129,8 @@ def decide_actions(state: SupervisorState) -> dict:
     }
 
 
-def make_dispatch_commands(store: Optional[BaseStore] = None):
-    """
-    Factory for the final dispatch node.
+def make_dispatch_commands(store: BaseStore | None = None):
+    """Factory for the final dispatch node.
 
     Returned as a factory so a Store can be injected at compile time
     later (for writing situation summaries to memory). The store
@@ -135,12 +138,7 @@ def make_dispatch_commands(store: Optional[BaseStore] = None):
     """
 
     def dispatch_commands(state: SupervisorState) -> dict:
-        """
-        Stub dispatcher — logs the commands instead of sending them.
-
-        A real implementation will publish to a Kafka topic / actuator
-        queue, and optionally write the situation summary to the Store.
-        """
+        """Stub dispatcher — logs the commands instead of sending them."""
         commands = state.pending_commands
         logger.info("Supervisor dispatching %d command(s)", len(commands))
         return {"status": StatusValue.COMPLETED}

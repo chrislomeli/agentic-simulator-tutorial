@@ -39,25 +39,22 @@ from __future__ import annotations
 
 import uuid
 from typing import Annotated
-from typing import Any, Dict, List, Optional
 
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field
 
+from agents.schemas import AnomalyFinding
 from agents.state_types import StatusValue
 from transport.schemas import SensorEvent
-
-
-
 
 
 # ── Custom reducer for sensor event accumulation ──────────────────────────────
 
 def append_events(
-        existing: List[SensorEvent],
-        new: List[SensorEvent],
-) -> List[SensorEvent]:
+        existing: list[SensorEvent],
+        new: list[SensorEvent],
+) -> list[SensorEvent]:
     """
     Reducer that appends new sensor events to the existing list.
 
@@ -72,34 +69,6 @@ def append_events(
     MAX_EVENT_WINDOW = 50  # Keep the last 50 events per cluster agent
     combined = existing + new
     return combined[-MAX_EVENT_WINDOW:]  # Trim from the front (oldest first)
-
-
-
-# ── Finding model ─────────────────────────────────────────────────────────────
-
-class AnomalyFinding(BaseModel):
-    """
-    A structured anomaly record produced by the cluster agent.
-
-    The cluster agent writes these; the supervisor reads them.
-
-    finding_id      : UUID string.
-    cluster_id      : Which cluster detected this.
-    anomaly_type    : e.g. "sensor_fault", "threshold_breach", "correlated_event"
-    affected_sensors: List of source_ids involved.
-    confidence      : Agent's confidence this is a real event (not noise).
-    summary         : Human-readable description for the supervisor's context.
-    raw_context     : Relevant sensor readings that led to this finding.
-                      Passed to the supervisor for cross-cluster correlation.
-    """
-    finding_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    cluster_id: str
-    anomaly_type: str
-    affected_sensors: List[str] = Field(default_factory=list)
-    confidence: float
-    summary: str
-    raw_context: Dict[str, Any]
-
 
 
 # ── Cluster agent state ───────────────────────────────────────────────────────
@@ -123,21 +92,21 @@ class ClusterAgentState(BaseModel):
     # ── Incoming sensor data ──────────────────────────────────────────
     # Annotated with append_events reducer so new events accumulate.
     # ingest_events node writes here; classify node reads here.
-    sensor_events: Annotated[List[SensorEvent], append_events] = Field(default_factory=list)
+    sensor_events: Annotated[list[SensorEvent], append_events] = Field(default_factory=list)
 
     # The single most-recent event that triggered this invocation.
     # Separate from sensor_events so classify can easily find the trigger.
-    trigger_event: Optional[SensorEvent]
+    trigger_event: SensorEvent | None = None
 
     # ── LLM tool loop ─────────────────────────────────────────────────
     # add_messages reducer appends new messages rather than overwriting.
     # classify node reads and writes here via the ToolNode loop.
-    messages: Annotated[List[BaseMessage], add_messages] = Field(default_factory=list)
+    messages: Annotated[list[BaseMessage], add_messages] = Field(default_factory=list)
 
     # ── Findings output ───────────────────────────────────────────────
     # Populated by classify when anomalies are detected.
     # Read by report_findings to package for the supervisor.
-    anomalies: List[AnomalyFinding] = Field(default_factory=list)
+    anomalies: list[AnomalyFinding] = Field(default_factory=list)
 
     # ── Control ───────────────────────────────────────────────────────
     # idle       : Waiting for a new trigger event
@@ -146,4 +115,4 @@ class ClusterAgentState(BaseModel):
     # error      : Something went wrong — details in error_message
     status: StatusValue = Field(default=StatusValue.IDLE)
 
-    error_message: Optional[str]
+    error_message: str | None = None

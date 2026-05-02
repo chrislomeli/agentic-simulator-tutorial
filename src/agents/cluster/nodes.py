@@ -10,12 +10,12 @@ The graph builder (add_node, add_edge, compile) lives in graph.py.
 """
 
 import logging
-from typing import Optional
 from uuid import uuid4
 
 from langgraph.store.base import BaseStore
 
-from agents.cluster.state import AnomalyFinding, ClusterAgentState
+from agents.cluster.state import ClusterAgentState
+from agents.schemas import AnomalyFinding
 from agents.routing import _route_base
 from agents.state_types import StatusValue
 
@@ -79,7 +79,7 @@ def classify(state: ClusterAgentState) -> dict:
     }
 
 
-def make_report_findings(store: Optional[BaseStore] = None):
+def make_report_findings(store: BaseStore | None = None):
     def report_findings(state: ClusterAgentState) -> dict:
         """
         Final node — logs findings and writes each AnomalyFinding to the
