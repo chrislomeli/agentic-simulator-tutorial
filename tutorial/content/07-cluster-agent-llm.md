@@ -17,14 +17,12 @@ By the end, `python main.py` will invoke a real LLM to classify sensor data and 
 From session 6, the cluster graph topology looks like this:
 
 ```
-START → ingest_events → classify → route_after_classify_llm
-                             ↑              ↓ (tool_calls present)
-                        tool_node ←─────────
-                             ↓ (no tool_calls)
-                        report_findings → END
+START → ingest_events → classify → route_after_classify → report_findings → END
 ```
 
-`tool_node` is a placeholder stub. `route_after_classify_llm` checks `state.messages[-1]` for `tool_calls` — if there are none, it routes to `report_findings`. In this session the LLM uses `with_structured_output`, which never produces `tool_calls` on the messages list, so the ToolNode branch stays inert. Session 8 activates it.
+`ingest_events` sets status to `processing`. `classify` is currently a stub that returns a placeholder `AnomalyFinding`. `route_after_classify` uses `_route_base` — it routes to `report_findings` on success and to `END` on error. `report_findings` writes findings to the store and sets status to `completed`.
+
+This session replaces the stub `classify` function with `make_classify_node(registry)`. Nothing else in the graph changes.
 
 ---
 
@@ -197,8 +195,7 @@ from agents.cluster.nodes import (
     ingest_events,
     make_classify_node,
     make_report_findings,
-    route_after_classify_llm,
-    tool_node,
+    route_after_classify,
 )
 ```
 
@@ -283,16 +280,27 @@ If you see `Findings: 0` the LLM decided the single reading wasn't enough eviden
 
 | | Session 6 | Session 7 |
 |---|---|---|
-| Graph topology | ✓ | unchanged |
+| Graph topology | linear (no cycle) | unchanged |
 | State schema | ✓ | unchanged |
-| Routers | ✓ | unchanged |
-| `classify` node | stub function | `make_classify_node(registry)` factory |
-| `tool_node` | stub placeholder | still placeholder (session 8) |
-| `route_after_classify_llm` | checks `tool_calls` | unchanged — never sees tool_calls this session |
-| Prompt template | has tools mention | tools mention removed |
+| Router | `route_after_classify` | unchanged |
+| `classify` node | stub placeholder | `make_classify_node(registry)` factory |
+| Prompt template | has tools section | tools section removed |
 
-The `ToolNode` stub and the `classify → tool_node → classify` cycle edge stay in the graph. `route_after_classify_llm` never routes to `tool_node` because `with_structured_output` doesn't add messages to `state.messages`. The code is already in the right shape for session 8.
+The graph topology — no `ToolNode`, no cycle — stays exactly as it was. `state.messages` exists in the schema but is never written this session; `with_structured_output` bypasses the message list entirely.
 
 ---
 
-*Next: Session 8 activates the ReAct loop — real tools bound to the LLM, `ToolNode` replaces the stub, and `route_after_classify_llm` starts routing to `tool_node` when the LLM wants to inspect sensor data before deciding.*
+## What this session can't do yet
+
+The LLM sees raw event JSON and must do evidence extraction, reasoning, and decision simultaneously in one call. With a single high-temperature reading and no corroborating sensors, the confidence calibration rules work — but with 30+ events across multiple sensor types, the LLM is doing noisy work.
+
+Specifically:
+- **Evidence extraction** — the LLM must identify which sensor types are elevated from raw JSON. It has no structured view of "temperature: max 52°C, humidity: min 12%, wind: max 14 m/s."
+- **No cross-tick history** — the store is wired but `ingest_events` doesn't load previous windows yet. Single-tick anomalies only.
+- **No tool loop** — the LLM makes one call and commits. It can't ask "what was the temperature here 3 ticks ago?" or "are all wind sensors elevated or just one?"
+
+Session 8 adds the tools that let the LLM do step 1 cleanly, and wires the store so `ingest_events` loads the rolling event window.
+
+---
+
+*Next: Session 8 adds the ReAct tool loop — real tools bound to the LLM, a `ToolNode` in the graph, and the `classify → tool_node → classify` cycle. `ingest_events` gains store reads; `report_findings` gains store writes. The LLM decides when it has enough evidence.*

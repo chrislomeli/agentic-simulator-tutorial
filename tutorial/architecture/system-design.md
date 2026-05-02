@@ -163,6 +163,36 @@ The bridge drives world ticks and invokes the supervisor once per tick with all 
 ### 5. Resource assessment is additive
 The resource layer — evaluating whether available personnel, equipment, and air support are positioned to respond — bolts on after fire danger evaluation without changing the agent architecture. The supervisor's `decide_actions` node produces `ActuatorCommand` objects. Resource tools (querying `ResourceInventory`) are added to the supervisor's tool set in a later session. Nothing earlier changes.
 
+### 6. The `classify` node — three cognitive responsibilities, one ReAct loop
+
+Any classification task has three distinct cognitive steps:
+
+1. **Evidence extraction** — turn raw sensor data into structured signals (max temp, min humidity, how many sensor types agree)
+2. **Reasoning** — apply domain rules to the structured signals (do these readings meet the fire-weather threshold? is this corroboration or noise?)
+3. **Decision** — commit to an anomaly type and confidence score
+
+A naive implementation attempts all three in a single LLM call from raw event JSON. This is fragile: the LLM has to find the signal in noise, apply rules, and decide simultaneously with up to 50 raw readings in context.
+
+The ReAct tool loop solves this without adding graph nodes. The `classify` node runs a loop:
+
+```
+classify:
+  LLM sees: prompt + all messages so far (including tool results)
+  LLM does: call get_sensor_summary() → structured features
+  LLM does: call check_threshold() → which rules fire
+  LLM does: (when satisfied) produce final JSON → ClassifyOutput
+```
+
+The three cognitive steps happen in the same node, driven by the LLM's own judgment about when it has enough evidence. This is strictly better than three hardcoded nodes because:
+
+- The LLM decides how many tool calls it needs. Simple cases (one sensor far above threshold) need one call. Ambiguous cases (marginal readings across three types) may need three.
+- No intermediate state format to design. Tool results are messages — the LLM sees them in context.
+- Fewer graph nodes, fewer failure modes.
+
+**The tools give the LLM structured access to data it already has.** `get_sensor_summary` doesn't fetch new data — it aggregates `state.sensor_events` into a tidy dict. `check_threshold` applies the domain rules programmatically. The LLM uses these to do evidence extraction cleanly, then reasons over the structured results.
+
+Session 07 makes the first LLM call without tools — a single call from raw event JSON, deliberately limited. Session 08 adds the tool loop and shows why the tools matter.
+
 ---
 
 ## Domain Rules (current implementation)
