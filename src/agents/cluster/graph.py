@@ -1,19 +1,14 @@
 """
 ogar.agents.cluster.graph
 
-Cluster agent LangGraph subgraph — ReAct-ready topology.
+Cluster agent LangGraph subgraph — stub mode.
 
 Topology:
-  START → ingest_events → classify → route_after_classify_llm
-                               ↑              ↓ (tool_calls present)
-                          tool_node ←─────────
-                               ↓ (no tool_calls)
-                          report_findings → END
+  START → ingest_events → classify → route_after_classify
+        → report_findings → END
 
-In stub and session-7 (LLM, no tools) modes, classify never produces
-tool_calls so the cycle never activates. The topology is pre-wired so
-session 8 only needs to swap tool_node for langgraph.prebuilt.ToolNode
-with real tools bound.
+Session 7 adds make_classify_node(registry), tool_node, and the ReAct
+cycle (tool_node → classify). The topology changes there, not here.
 
 Usage:
   graph = build_cluster_agent_graph()
@@ -29,8 +24,7 @@ from agents.cluster.nodes import (
     classify,
     ingest_events,
     make_report_findings,
-    route_after_classify_llm,
-    tool_node,
+    route_after_classify,
 )
 from agents.cluster.state import ClusterAgentState
 
@@ -41,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 def build_cluster_agent_graph(store: Optional[BaseStore] = None):
     """
-    Compile and return the cluster agent subgraph.
+    Compile and return the cluster agent subgraph (stub mode).
 
     Returns a compiled LangGraph graph ready for .invoke() or .stream().
 
@@ -58,17 +52,11 @@ def build_cluster_agent_graph(store: Optional[BaseStore] = None):
     builder = StateGraph(ClusterAgentState)
     builder.add_node("ingest_events", ingest_events)
     builder.add_node("classify", classify)
-    builder.add_node("tool_node", tool_node)
     builder.add_node("report_findings", make_report_findings(store=store))
 
     builder.add_edge(START, "ingest_events")
     builder.add_edge("ingest_events", "classify")
-    builder.add_conditional_edges(
-        "classify",
-        route_after_classify_llm,
-        ["tool_node", "report_findings", END],
-    )
-    builder.add_edge("tool_node", "classify")  # ReAct cycle
+    builder.add_conditional_edges("classify", route_after_classify)
     builder.add_edge("report_findings", END)
 
     compiled = builder.compile()

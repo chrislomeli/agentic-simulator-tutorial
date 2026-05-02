@@ -14,7 +14,6 @@ import logging
 from typing import Optional
 from uuid import uuid4
 
-from langchain_core.messages import AIMessage
 from langgraph.store.base import BaseStore
 
 from agents.cluster.node_tracer import node_trace
@@ -88,19 +87,6 @@ def classify(state: ClusterAgentState) -> dict:
     }
 
 
-@node_trace("tool_node")
-def tool_node(state: ClusterAgentState) -> dict:
-    """
-    Placeholder for the LangGraph ToolNode used in the ReAct loop.
-
-    Session 8 replaces this with langgraph.prebuilt.ToolNode bound to
-    the cluster agent's tool set. In stub and session-7 modes this node
-    is never reached — route_after_classify_llm only routes here when
-    the LLM produces tool_calls, which the stub classify never does.
-    """
-    return {}
-
-
 def make_report_findings(store: Optional[BaseStore] = None):
     @node_trace("report_findings")
     def report_findings(state: ClusterAgentState) -> dict:
@@ -140,23 +126,3 @@ def make_report_findings(store: Optional[BaseStore] = None):
 
 def route_after_classify(state: ClusterAgentState) -> str:
     return _route_base(state, next_node="report_findings")
-
-
-def route_after_classify_llm(state: ClusterAgentState) -> str:
-    """
-    Router for LLM mode — checks whether the last message contains tool
-    calls (ReAct loop continues) or is a final answer (go to report_findings).
-
-    In stub and session-7 modes the LLM never produces tool_calls so this
-    always falls through to report_findings via _route_base.  Session 8
-    activates the tool_node branch by binding real tools to the LLM.
-    """
-    base = _route_base(state, next_node="report_findings")
-    if base != "report_findings":
-        return base
-
-    last = state.messages[-1] if state.messages else None
-    if isinstance(last, AIMessage) and getattr(last, "tool_calls", None):
-        return "tool_node"
-
-    return "report_findings"
