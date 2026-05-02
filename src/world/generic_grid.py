@@ -37,11 +37,9 @@ Nothing else should mutate cell state — this enforces the
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic
 
-from world.cell_state import CellState, GenericCell
-
-C = TypeVar("C", bound=CellState)
+from world.cell_state import C, GenericCell
 
 
 class GenericTerrainGrid(Generic[C]):

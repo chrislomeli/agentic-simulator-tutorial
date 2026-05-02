@@ -2,6 +2,7 @@
 
 import pytest
 
+from exceptions import ResourceError
 from resources.base import ResourceBase, ResourceStatus
 
 
@@ -91,7 +92,7 @@ class TestStatusTransitions:
     def test_deploy_out_of_service_raises(self):
         r = _make_resource()
         r.disable()
-        with pytest.raises(ValueError, match="OUT_OF_SERVICE"):
+        with pytest.raises(ResourceError, match="OUT_OF_SERVICE"):
             r.deploy()
 
     def test_send_en_route_mobile(self):
@@ -103,13 +104,13 @@ class TestStatusTransitions:
 
     def test_send_en_route_fixed_raises(self):
         r = _make_resource(mobile=False)
-        with pytest.raises(ValueError, match="not mobile"):
+        with pytest.raises(ResourceError, match="not mobile"):
             r.send_en_route(row=1, col=1)
 
     def test_send_en_route_out_of_service_raises(self):
         r = _make_resource(mobile=True)
         r.disable()
-        with pytest.raises(ValueError, match="OUT_OF_SERVICE"):
+        with pytest.raises(ResourceError, match="OUT_OF_SERVICE"):
             r.send_en_route(row=1, col=1)
 
     def test_release(self):

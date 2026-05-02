@@ -10,13 +10,16 @@ Loading order (pydantic-settings resolves in this priority, highest first):
 
 Usage
 ─────
-  from ogar.config import get_settings
+  from config import Settings
 
-  settings = get_settings()
+  settings = Settings(_env_file=os.getenv("AI_ENV_FILE"))
   key = settings.anthropic_api_key
-
-  # Apply LangSmith env vars so LangGraph picks them up automatically:
   settings.apply_langsmith()
+
+Settings is constructed once at the composition root and threaded down
+into anything that needs it. There is deliberately no module-level
+cached singleton — it makes tests harder, breaks in multi-process
+deployments, and hides the dependency from callers.
 
 Deployment modes
 ────────────────
@@ -29,12 +32,9 @@ from __future__ import annotations
 
 import dataclasses
 import os
-from functools import lru_cache
-from typing import Optional
+from enum import Enum
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
-from enum import Enum
 
 class LLMProvider(Enum):
     STUB = "STUB"
@@ -54,19 +54,19 @@ class LLMModel:
     model: str
     key_label: str
     provider: LLMProvider
-    api_key: Optional[str] = None
+    api_key: str | None = None
 
 
 class Settings(BaseSettings):
     # ── LLM credentials ───────────────────────────────────────────────────────
     llm_source: LLMProvider = LLMProvider.STUB
-    llm_model: Optional[LLMModel] = None
+    llm_model: LLMModel | None = None
     anthropic_api_key: str = ""
     openai_api_key: str = ""
     world_data: str = "src/domains/wildfire/scenario_data/north_south_fire.json"
 
     @property
-    def selected_model(self) -> Optional[LLMModel]:
+    def selected_model(self) -> LLMModel | None:
         if self.llm_model is None:
             return None
         connection = dataclasses.replace(self.llm_model)
@@ -82,13 +82,10 @@ class Settings(BaseSettings):
     langchain_endpoint: str = "https://api.smith.langchain.com"
 
     model_config = SettingsConfigDict(
-        # AI_ENV_FILE=/path/to/.env for local dev.
-        # Unset (None) on K8s — pydantic-settings skips file loading entirely
-        # and reads from environment variables only.
-        env_file=os.getenv("AI_ENV_FILE"),
+        # env_file is intentionally NOT set here — pass _env_file= at
+        # construction time so each caller controls which file to load.
+        # Tests construct Settings() without any .env interference.
         env_file_encoding="utf-8",
-        # Silently ignore keys in the .env file that are not defined above.
-        # Useful because the shared .env may contain keys for other projects.
         extra="ignore",
     )
 
@@ -113,16 +110,5 @@ class Settings(BaseSettings):
             if value and not os.environ.get(key):
                 os.environ[key] = value
 
-
-@lru_cache
-def get_settings() -> Settings:
-    """
-    Return the cached Settings singleton.
-
-    The cache means the .env file is read once per process.
-    In tests, call get_settings.cache_clear() before patching env vars
-    so a fresh Settings object is created.
-    """
-    return Settings()
 
 

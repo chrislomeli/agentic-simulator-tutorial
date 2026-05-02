@@ -42,16 +42,14 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic
 
-from world.cell_state import CellState
+from world.cell_state import C, CellState
 from world.environment import EnvironmentState
 from world.generic_grid import GenericTerrainGrid
 from world.physics import PhysicsModule, StateEvent
 
 logger = logging.getLogger(__name__)
-
-C = TypeVar("C", bound=CellState)
 
 
 # ── Ground truth snapshot ────────────────────────────────────────────────────

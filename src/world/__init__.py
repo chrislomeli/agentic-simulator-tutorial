@@ -36,7 +36,6 @@ from world.grid import TerrainType as TerrainType
 from world.physics import PhysicsModule as PhysicsModule
 from world.physics import StateEvent as StateEvent
 from world.sensor_inventory import SensorInventory as SensorInventory
-from world.weather import WeatherState as WeatherState
 
 __all__ = [
     "CellState",
@@ -50,5 +49,4 @@ __all__ = [
     "PhysicsModule",
     "StateEvent",
     "SensorInventory",
-    "WeatherState",
 ]

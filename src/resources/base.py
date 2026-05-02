@@ -62,7 +62,9 @@ import logging
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+from exceptions import ResourceError
 
 logger = logging.getLogger(__name__)
 
@@ -184,6 +186,15 @@ class ResourceBase(BaseModel):
     # ── Pydantic config ──────────────────────────────────────────────
     model_config = {"use_enum_values": False}
 
+    @model_validator(mode="after")
+    def _check_available_within_capacity(self) -> ResourceBase:
+        if self.available > self.capacity:
+            raise ResourceError(
+                f"Resource {self.resource_id!r}: available ({self.available}) "
+                f"exceeds capacity ({self.capacity})"
+            )
+        return self
+
     # ── State transitions ────────────────────────────────────────────
 
     def deploy(
@@ -200,7 +211,7 @@ class ResourceBase(BaseModel):
         Raises ValueError if the resource is OUT_OF_SERVICE.
         """
         if self.status == ResourceStatus.OUT_OF_SERVICE:
-            raise ValueError(
+            raise ResourceError(
                 f"Resource {self.resource_id!r} is OUT_OF_SERVICE and cannot be deployed"
             )
         self.status = ResourceStatus.DEPLOYED
@@ -227,11 +238,11 @@ class ResourceBase(BaseModel):
         Raises ValueError if the resource is not mobile or is OUT_OF_SERVICE.
         """
         if not self.mobile:
-            raise ValueError(
+            raise ResourceError(
                 f"Resource {self.resource_id!r} is not mobile — cannot send en route"
             )
         if self.status == ResourceStatus.OUT_OF_SERVICE:
-            raise ValueError(
+            raise ResourceError(
                 f"Resource {self.resource_id!r} is OUT_OF_SERVICE"
             )
         self.status = ResourceStatus.EN_ROUTE

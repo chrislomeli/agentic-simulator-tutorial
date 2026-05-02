@@ -2,22 +2,14 @@
 Tests for ogar.config
 
 Strategy: never touch the real .env file.
-Each test sets env vars directly (monkeypatch) and clears the lru_cache
-so a fresh Settings object is constructed from those vars.
+Each test sets env vars directly (monkeypatch) and constructs a fresh
+Settings() — no singleton, no cache to clear.
 """
 
 import os
 import pytest
 
-from config import Settings, get_settings
-
-
-@pytest.fixture(autouse=True)
-def clear_settings_cache():
-    """Clear the lru_cache before and after every test."""
-    get_settings.cache_clear()
-    yield
-    get_settings.cache_clear()
+from config import Settings
 
 
 @pytest.fixture(autouse=True)
@@ -80,8 +72,8 @@ class TestSettingsFromEnv:
 
 class TestApplyLangsmith:
     def test_sets_env_vars(self, monkeypatch):
+        monkeypatch.delenv("LANGCHAIN_TRACING_V2", raising=False)
         monkeypatch.setenv("LANGCHAIN_API_KEY", "")
-        monkeypatch.setenv("LANGCHAIN_TRACING_V2", "")
         monkeypatch.setenv("LANGCHAIN_PROJECT", "")
 
         s = Settings(
@@ -111,22 +103,3 @@ class TestApplyLangsmith:
         s.apply_langsmith()
 
         assert "LANGCHAIN_API_KEY" not in os.environ
-
-
-class TestGetSettings:
-    def test_returns_settings_instance(self):
-        s = get_settings()
-        assert isinstance(s, Settings)
-
-    def test_is_cached(self):
-        s1 = get_settings()
-        s2 = get_settings()
-        assert s1 is s2
-
-    def test_cache_clear_returns_fresh_instance(self, monkeypatch):
-        s1 = get_settings()
-        get_settings.cache_clear()
-        monkeypatch.setenv("LANGCHAIN_PROJECT", "fresh")
-        s2 = get_settings()
-        assert s1 is not s2
-        assert s2.langchain_project == "fresh"
