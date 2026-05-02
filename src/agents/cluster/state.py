@@ -38,14 +38,14 @@ Node responsibilities (skeleton — logic comes later)
 from __future__ import annotations
 
 import uuid
-from enum import StrEnum
 from typing import Annotated
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Optional
 
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field
 
+from agents.state_types import StatusValue
 from transport.schemas import SensorEvent
 
 
@@ -100,14 +100,6 @@ class AnomalyFinding(BaseModel):
     summary: str
     raw_context: Dict[str, Any]
 
-
-
-# ── State values  ───────────────────────────────────────────────────────
-class StatusValue(StrEnum):
-    IDLE = "idle"
-    PROCESSING = "processing"
-    COMPLETED = "completed"
-    ERROR = "error"
 
 
 # ── Cluster agent state ───────────────────────────────────────────────────────

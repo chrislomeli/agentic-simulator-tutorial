@@ -10,12 +10,14 @@ The graph builder (add_node, add_edge, compile) lives in graph.py.
 """
 
 import logging
-from typing import Literal, Optional
+from typing import Optional
 from uuid import uuid4
 
 from langgraph.store.base import BaseStore
 
-from agents.cluster.state import AnomalyFinding, ClusterAgentState, StatusValue
+from agents.cluster.state import AnomalyFinding, ClusterAgentState
+from agents.routing import _route_base
+from agents.state_types import StatusValue
 
 logger = logging.getLogger(__name__)
 
@@ -107,14 +109,5 @@ def make_report_findings(store: Optional[BaseStore] = None):
 
 # ── Routers ──────────────────────────────────────────────────────────────────
 
-def route_after_classify(
-    state: ClusterAgentState,
-) -> Literal["report_findings", "__end__"]:
-    if state.status == StatusValue.ERROR:
-        logger.warning(
-            "ClusterAgent[%s] route_after_classify: exiting due to error: %s",
-            state.cluster_id,
-            state.error_message,
-        )
-        return "__end__"
-    return "report_findings"
+def route_after_classify(state: ClusterAgentState) -> str:
+    return _route_base(state, next_node="report_findings")
