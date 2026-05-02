@@ -12,13 +12,15 @@ real logic can be layered on later without restructuring the graph.
 """
 
 import logging
-from typing import List, Literal, Optional
+from typing import List, Optional
 
 from langgraph.store.base import BaseStore
 from langgraph.types import Send
 
 from agents.cluster.graph import cluster_agent_graph
-from agents.cluster.state import ClusterAgentState, StatusValue
+from agents.cluster.state import ClusterAgentState
+from agents.routing import _route_base
+from agents.state_types import StatusValue
 from agents.supervisor.state import SupervisorState
 
 logger = logging.getLogger(__name__)
@@ -148,17 +150,5 @@ def make_dispatch_commands(store: Optional[BaseStore] = None):
 
 # ── Routers ──────────────────────────────────────────────────────────────────
 
-def route_after_decide(
-    state: SupervisorState,
-) -> Literal["dispatch_commands", "__end__"]:
-    """
-    After decide_actions: error → end, otherwise dispatch.
-    """
-    if state.status == StatusValue.ERROR:
-        logger.warning(
-            "Supervisor ROUTER: route_after_decide exiting due to error: %s",
-            state.error_message,
-        )
-        return "__end__"
-
-    return "dispatch_commands"
+def route_after_decide(state: SupervisorState) -> str:
+    return _route_base(state, next_node="dispatch_commands")

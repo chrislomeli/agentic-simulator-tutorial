@@ -44,7 +44,8 @@ from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field
 
-from agents.cluster.state import AnomalyFinding, StatusValue
+from agents.cluster.state import AnomalyFinding
+from agents.state_types import StatusValue
 
 
 # ── Stub actuator command ────────────────────────────────────────────────────
