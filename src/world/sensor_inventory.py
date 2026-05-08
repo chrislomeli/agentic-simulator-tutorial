@@ -137,6 +137,17 @@ class SensorInventory:
             if self._positions[sid] == (row, col, layer)
         ]
 
+    def random_sensors(self, n: int) -> list[SensorBase]:
+        """Return n random sensors."""
+        import random
+
+        all_locations = [s.location for s in self._sensors.values()]
+        sampled_locations = set(random.sample(all_locations, min(n, len(all_locations))))
+        return [s for s in self._sensors.values() if s.location in sampled_locations]
+
+    def location_sensors(self, locations: list[tuple[int, int]]) -> list[SensorBase]:
+        return [s for s in self._sensors.values() if s.location in locations]
+
     def all_sensors(self) -> list[SensorBase]:
         """Return all registered sensors."""
         return list(self._sensors.values())

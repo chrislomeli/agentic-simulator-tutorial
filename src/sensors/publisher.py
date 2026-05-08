@@ -133,7 +133,7 @@ class SensorPublisher:
         logger.info("SensorPublisher stop requested")
         self._stop_requested = True
 
-    async def run(self, ticks: int | None = None) -> None:
+    async def run(self, ticks: int | None = None, location_count: int = 2) -> None:
         """
         Run the publisher loop.
 
@@ -181,7 +181,9 @@ class SensorPublisher:
 
             # ── Tick all sensors ────────────────────────────────────────
             active_sensors = (
-                self._inventory.all_sensors() if self._inventory is not None else self._sensors
+                self._inventory.random_sensors(location_count)
+                if self._inventory is not None
+                else self._sensors
             )
             for sensor in active_sensors:
                 # Sample local conditions if a sampler and engine are available

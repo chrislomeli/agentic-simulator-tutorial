@@ -240,12 +240,12 @@ class CollatedRecordRisk(BaseModel):
     risk_score: int = Field(
         ge=0,
         le=10,
-        description="Agent's fire danger estimate (0 = no danger, 5 = moderate danger, 10 = extreme danger)",
+        description="Agent's fire danger estimate integer",
     )
-    confidence: float = Field(
+    confidence: int = Field(
         ge=0,
         le=3,
-        description="0 = no confidence, 2 = some confidence, 3 = good confidence, 4 = very confident",
+        description="confidence in risk_score",
     )
     confidence_rationale: str = Field(
         description="Why the agent chose this confidence level. "
@@ -254,6 +254,6 @@ class CollatedRecordRisk(BaseModel):
     )
     contributing_factors: list[str] = Field(
         default_factory=list,
-        description="What drove the assessment: ['temp=52°C (>38 threshold)', "
+        description="What drove the assessment: e.g. ['temp=52°C (>38 threshold)', "
         "'humidity=12% (<15 critical)', 'terrain=grassland (high fuel)']",
     )

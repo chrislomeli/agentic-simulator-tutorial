@@ -73,18 +73,16 @@ class ActuatorCommand(BaseModel):
 
 
 def max_cluster_score(
-    existing: dict[str, int],
-    incoming: dict[str, int],
-) -> dict[str, int]:
-    """Merge per-cluster risk scores by keeping the maximum value.
+    existing: dict[str, RiskScore],
+    incoming: dict[str, RiskScore],
+) -> dict[str, RiskScore]:
 
-    Each cluster is fanned-out exactly once per supervisor invocation, so
-    this is effectively last-write-wins. The max() guard is defensive against
-    future changes where a cluster might be evaluated more than once per tick.
-    """
     merged = dict(existing)
     for cluster_id, score in incoming.items():
-        merged[cluster_id] = max(merged.get(cluster_id, 0), score)
+        current = merged.get(cluster_id)
+        merged[cluster_id] = (
+            max([current, score], key=lambda s: s.risk_score if s else -1) if current else score
+        )
     return merged
 
 
@@ -106,6 +104,11 @@ def merge_cluster_findings(
 # ── Supervisor state ─────────────────────────────────────────────────────────
 
 
+class RiskScore(BaseModel):
+    risk_score: int
+    confidence: int
+
+
 class SupervisorState(TracedState):
     """
     The internal working state for one supervisor graph execution.
@@ -120,7 +123,7 @@ class SupervisorState(TracedState):
     clusters: dict[str, list[CollatedRecord]] = Field(default_factory=dict)
 
     # ── Aggregated output of cluster fan-out ─────────────────────────
-    cluster_score: Annotated[dict[str, int], max_cluster_score] = Field(default_factory=dict)
+    cluster_score: Annotated[dict[str, RiskScore], max_cluster_score] = Field(default_factory=dict)
 
     cluster_findings: Annotated[dict[str, list[CollatedRecordRisk]], merge_cluster_findings] = (
         Field(default_factory=dict)

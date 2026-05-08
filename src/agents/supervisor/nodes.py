@@ -17,7 +17,6 @@ factories so the graph builder can thread dependencies in at compile
 time. This keeps the module free of side effects at import time.
 """
 
-import json
 import logging
 
 from langgraph.graph.state import CompiledStateGraph
@@ -27,7 +26,7 @@ from langgraph.types import Send
 from agents.cluster.state import ClusterAgentState
 from agents.commons.schemas import CollatedRecord, CollatedRecordRisk
 from agents.commons.state_types import StatusValue
-from agents.supervisor.state import SupervisorState
+from agents.supervisor.state import RiskScore, SupervisorState
 
 logger = logging.getLogger(__name__)
 
@@ -91,11 +90,15 @@ def make_run_cluster_agent(cluster_graph: CompiledStateGraph):
 
         result = cluster_graph.invoke(state)
         assessments: list[CollatedRecordRisk] = result.get("risk_assessments", [])
-        high_score = max((obj.risk_score for obj in assessments), default=0)
+        if assessments:
+            highest = max(assessments, key=lambda r: r.risk_score)
+            cluster_score = RiskScore(risk_score=highest.risk_score, confidence=highest.confidence)
+        else:
+            cluster_score = RiskScore(risk_score=0, confidence=0)
 
         return {
             "cluster_findings": {cluster_id: assessments},
-            "cluster_score": {cluster_id: high_score},
+            "cluster_score": {cluster_id: cluster_score},
         }
 
     return run_cluster_agent
@@ -149,8 +152,8 @@ def make_dispatch_commands(store: BaseStore | None = None):
 
         print("\nDISPATCH FINAL FINDINGS")
         print("Cluster risk scores (0–10)")
-        print(json.dumps(state.cluster_score, indent=2))
-
+        for key, value in state.cluster_score.items():
+            print(f"{key}: risk_score: {value.risk_score}, confidence: {value.confidence}")
         return {"status": StatusValue.COMPLETED}
 
     return dispatch_commands

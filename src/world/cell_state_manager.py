@@ -542,6 +542,65 @@ class CellStateManager:
             if snap.cluster_id == cluster_id and snap.metrics:
                 snap.mark_evaluated()
 
+    def snapshot_halo(
+        self,
+        center_positions: set[tuple[int, int]],
+        triggered_positions: set[tuple[int, int]],
+    ) -> dict[str, list[CollatedRecord]]:
+        """Get 3x3 halo around triggered cells, grouped by cluster.
+
+        Returns all cells within 1 cell of any triggered position that have
+        data, grouped by their cluster_id. This provides spatial context
+        without sending the entire cluster.
+
+        Parameters
+        ----------
+        center_positions : set of (row, col) tuples
+            The triggered cell positions (centers of 3x3 windows).
+        triggered_positions : set of (row, col) tuples
+            Which positions should be marked triggered=True in their records.
+
+        Returns
+        -------
+        dict[str, list[CollatedRecord]]
+            Records grouped by cluster_id. Each cell appears once even if
+            it's within multiple halos (triggered flag is preserved).
+        """
+        seen: set[tuple[int, int]] = set()
+        records_by_cluster: dict[str, list[CollatedRecord]] = {}
+
+        for tr, tc in center_positions:
+            for r in range(tr - 1, tr + 2):
+                for c in range(tc - 1, tc + 2):
+                    if (r, c) in seen:
+                        continue
+                    seen.add((r, c))
+
+                    snap = self._cells.get((r, c))
+                    if not snap or not snap.metrics:
+                        continue
+
+                    cluster_id = snap.cluster_id
+                    if cluster_id is None:
+                        continue
+
+                    triggered = (r, c) in triggered_positions
+                    record = snap.to_collated_record(cluster_id, triggered=triggered)
+                    records_by_cluster.setdefault(cluster_id, []).append(record)
+
+        return records_by_cluster
+
+    def mark_cells_evaluated(self, positions: set[tuple[int, int]]) -> None:
+        """Mark specific cells as evaluated.
+
+        Called after snapshot_halo() so future evaluations compute deltas
+        relative to the state the LLM actually saw.
+        """
+        for r, c in positions:
+            snap = self._cells.get((r, c))
+            if snap and snap.metrics:
+                snap.mark_evaluated()
+
     def get_snapshot(self, row: int, col: int) -> _CellSnapshot | None:
         """Peek at a cell's current state.  None if no events received."""
         return self._cells.get((row, col))
