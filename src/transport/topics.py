@@ -1,5 +1,5 @@
 """
-ogar.transport.topics
+world-simiulator.transport.topics
 
 Kafka topic name constants and helpers.
 

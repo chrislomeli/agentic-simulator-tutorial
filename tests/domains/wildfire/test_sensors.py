@@ -1,4 +1,4 @@
-"""Tests for ogar.domains.wildfire.sensors."""
+"""Tests for world-simiulator.domains.wildfire.sensors."""
 
 import random
 import pytest

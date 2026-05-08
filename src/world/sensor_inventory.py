@@ -1,5 +1,5 @@
 """
-ogar.world.sensor_inventory
+world-simiulator.world.sensor_inventory
 
 SensorInventory — first-class management of sensor placement on a grid.
 
@@ -65,9 +65,9 @@ class SensorInventory:
         self._grid_rows = grid_rows
         self._grid_cols = grid_cols
         self._grid_layers = grid_layers
-        self._sensors: dict[str, SensorBase] = {}                    # source_id → sensor
-        self._positions: dict[str, tuple[int, int, int]] = {}        # source_id → (row, col, layer)
-        self._type_index: dict[str, set[str]] = {}                   # source_type → {source_ids}
+        self._sensors: dict[str, SensorBase] = {}  # source_id → sensor
+        self._positions: dict[str, tuple[int, int, int]] = {}  # source_id → (row, col, layer)
+        self._type_index: dict[str, set[str]] = {}  # source_type → {source_ids}
 
     # ── Registration ─────────────────────────────────────────────────────────
 
@@ -80,11 +80,12 @@ class SensorInventory:
           - The position is out of grid bounds
         """
         if sensor.source_id in self._sensors:
-            raise ValueError(
-                f"Sensor {sensor.source_id!r} is already registered"
-            )
-        if not (0 <= row < self._grid_rows and 0 <= col < self._grid_cols
-                and 0 <= layer < self._grid_layers):
+            raise ValueError(f"Sensor {sensor.source_id!r} is already registered")
+        if not (
+            0 <= row < self._grid_rows
+            and 0 <= col < self._grid_cols
+            and 0 <= layer < self._grid_layers
+        ):
             raise ValueError(
                 f"Position ({row}, {col}, {layer}) out of bounds for grid "
                 f"({self._grid_rows}×{self._grid_cols}×{self._grid_layers})"
@@ -94,7 +95,11 @@ class SensorInventory:
         self._type_index.setdefault(sensor.source_type, set()).add(sensor.source_id)
         logger.debug(
             "Registered sensor %s (%s) at (%d, %d, %d)",
-            sensor.source_id, sensor.source_type, row, col, layer,
+            sensor.source_id,
+            sensor.source_type,
+            row,
+            col,
+            layer,
         )
 
     def unregister(self, source_id: str) -> SensorBase:
@@ -180,10 +185,7 @@ class SensorInventory:
 
     def all_layer_positions(self) -> dict[str, set[tuple[int, int, int]]]:
         """Return {source_type: {(row, col, layer), ...}} for every registered type."""
-        return {
-            stype: self.layer_positions(stype)
-            for stype in self._type_index
-        }
+        return {stype: self.layer_positions(stype) for stype in self._type_index}
 
     def layer_coverage_ratio(self, source_type: str) -> float:
         """
@@ -219,7 +221,10 @@ class SensorInventory:
 
         logger.info(
             "Thinned layer %r: kept %d/%d sensors, removed %d",
-            source_type, len(sids) - len(removed), len(sids), len(removed),
+            source_type,
+            len(sids) - len(removed),
+            len(sids),
+            len(removed),
         )
         return removed
 
@@ -246,7 +251,10 @@ class SensorInventory:
 
         logger.info(
             "Injected %s failure on %d/%d %s sensors",
-            mode.value, len(targets), len(sids), source_type,
+            mode.value,
+            len(targets),
+            len(sids),
+            source_type,
         )
         return targets
 
@@ -296,8 +304,10 @@ class SensorInventory:
 
         logger.info(
             "Thinned inventory: kept %d/%d sensors (%.0f%%), removed %d",
-            len(self._sensors), len(all_ids),
-            keep_fraction * 100, len(removed),
+            len(self._sensors),
+            len(all_ids),
+            keep_fraction * 100,
+            len(removed),
         )
         return removed
 
@@ -336,7 +346,10 @@ class SensorInventory:
 
         logger.info(
             "Injected %s failure on %d/%d sensors (%.0f%%)",
-            mode.value, len(targets), len(all_ids), fraction * 100,
+            mode.value,
+            len(targets),
+            len(all_ids),
+            fraction * 100,
         )
         return targets
 

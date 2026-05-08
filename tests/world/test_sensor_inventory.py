@@ -1,4 +1,4 @@
-"""Tests for ogar.world.sensor_inventory — SensorInventory."""
+"""Tests for world-simiulator.world.sensor_inventory — SensorInventory."""
 
 import pytest
 

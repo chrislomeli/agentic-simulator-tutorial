@@ -1,4 +1,4 @@
-"""Tests for ogar.domains.wildfire.cell_state."""
+"""Tests for world-simiulator.domains.wildfire.cell_state."""
 
 import pytest
 

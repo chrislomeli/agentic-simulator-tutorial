@@ -1,4 +1,4 @@
-"""Tests for ogar.transport.schemas — SensorEvent envelope."""
+"""Tests for world-simiulator.transport.schemas — SensorEvent envelope."""
 
 from datetime import datetime, timezone
 

@@ -1,67 +1,75 @@
 """
-ogar.agents.cluster.graph
+world-simulator.agents.cluster.graph
 
-Cluster agent LangGraph subgraph — stub mode.
+Cluster agent LangGraph subgraph.
 
-Topology:
-  START → ingest_events → classify → route_after_classify
-        → report_findings → END
+Topology
+────────
+    START → ingest_events → evaluate → route_after_classify
+          → report_findings → END
 
-Usage:
-  graph = build_cluster_agent_graph()
+Construction
+────────────
+``build_cluster_agent_graph`` is the only public entry point. It takes
+the long-lived dependencies (``PromptRegistry``, optional ``BaseStore``)
+that the nodes need and threads them in via the ``make_*`` factories.
 
-Why a subgraph?
-───────────────
-The cluster agent is compiled as a standalone subgraph.
-The supervisor invokes it as a node (via Send API fan-out).
-Each invocation gets its own state, which is why it can run in
-parallel for multiple clusters without state collision.
-
-Compiling separately also means it can be tested in isolation —
-you can invoke the cluster agent directly with a SensorEvent
-without needing the supervisor running.
+There is deliberately no module-level compiled graph here. Compiling at
+import time would force every consumer to share a single registry/store
+configuration and would also run side-effecting work just to import the
+module — both make tests harder and leak state across runs.
 """
 
 import logging
 
 from langgraph.graph import END, START, StateGraph
-from langgraph.store.base import BaseStore
 
-from agents.cluster.nodes import ingest_events, classify, make_report_findings, route_after_classify
-from agents.cluster.state import ClusterAgentState
+from agents.cluster.nodes import (
+    make_evaluate_node,
+    make_report_risk_node,
+    route_after_evaluate,
+)
+from agents.cluster.state import ClusterAgentState, StreamingRiskGraph
 
 logger = logging.getLogger(__name__)
 
 
-# ── Graph builder ─────────────────────────────────────────────────────────────
+def build_cluster_agent_graph() -> StreamingRiskGraph:
+    """Compile the streaming-risk variant of the cluster subgraph.
 
-def build_cluster_agent_graph(*, store: BaseStore | None = None):
+    Topology
+    ────────
+        START → evaluate → route_after_evaluate → report_risk → END
+
+    Notably **does not** include the `collate` node. This variant
+    expects the caller (the runtime orchestrator) to pre-populate
+    ``state.collated_records`` from a streaming collator
+    (``CellStateManager``). Including ``collate`` would overwrite
+    those records — see docs/runtime-orchestrator.md § Verified facts.
+
+    Use ``build_cluster_agent_graph`` for the demo path that consumes
+    raw ``SensorEvent``s in batch.
+
+    Parameters
+    ──────────
+    agent_deps : AgentDependencies
+        DI container with prompt_registry, llm_registry, and optional
+        store. The evaluate node uses prompt_registry for the system
+        prompt and llm_registry for model lookup. report_risk uses
+        store to persist RiskAssessment records.
     """
-    Compile and return the cluster agent subgraph (stub mode).
-
-    Returns a compiled LangGraph graph ready for .invoke() or .stream().
-
-    To test the cluster agent in isolation:
-      graph = build_cluster_agent_graph()           # no store
-      graph = build_cluster_agent_graph(store=s)    # with InMemoryStore
-      result = graph.invoke({
-          "cluster_id": "cluster-north",
-          "workflow_id": "test-run-1",
-          "trigger_event": some_sensor_event,
-      })
-    """
-
     builder = StateGraph(ClusterAgentState)
-    builder.add_node("ingest_events", ingest_events)
-    builder.add_node("classify", classify)
-    builder.add_node("report_findings", make_report_findings(store=store))
+    builder.add_node(
+        "evaluate",
+        make_evaluate_node(),
+    )
+    builder.add_node(
+        "report_risk",
+        make_report_risk_node(store=None),
+    )
 
-    # ── Stub mode: deterministic classify ──────────────────────────
-    builder.add_edge(START, "ingest_events")
-    builder.add_edge("ingest_events", "classify")
-    builder.add_conditional_edges("classify", route_after_classify)
+    builder.add_edge(START, "evaluate")
+    builder.add_conditional_edges("evaluate", route_after_evaluate)
+    builder.add_edge("report_risk", END)
 
-    builder.add_edge("report_findings", END)
-
-    compiled = builder.compile()
-    return compiled
+    return StreamingRiskGraph(builder.compile())

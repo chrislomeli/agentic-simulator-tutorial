@@ -1,5 +1,5 @@
 """
-ogar.sensors.publisher
+world-simiulator.sensors.publisher
 
 Async sensor publisher loop.
 
@@ -151,10 +151,7 @@ class SensorPublisher:
         self._stop_requested = False
         self.ticks_completed = 0
 
-        sensor_count = (
-            self._inventory.size if self._inventory is not None
-            else len(self._sensors)
-        )
+        sensor_count = self._inventory.size if self._inventory is not None else len(self._sensors)
         logger.info(
             "SensorPublisher starting — %d sensor(s), %.2fs interval, limit=%s",
             sensor_count,
@@ -165,7 +162,9 @@ class SensorPublisher:
         while True:
             # ── Check stop conditions ───────────────────────────────────
             if self._stop_requested:
-                logger.info("SensorPublisher stopped by request after %d ticks", self.ticks_completed)
+                logger.info(
+                    "SensorPublisher stopped by request after %d ticks", self.ticks_completed
+                )
                 break
 
             if ticks is not None and self.ticks_completed >= ticks:
@@ -182,9 +181,7 @@ class SensorPublisher:
 
             # ── Tick all sensors ────────────────────────────────────────
             active_sensors = (
-                self._inventory.all_sensors()
-                if self._inventory is not None
-                else self._sensors
+                self._inventory.all_sensors() if self._inventory is not None else self._sensors
             )
             for sensor in active_sensors:
                 # Sample local conditions if a sampler and engine are available
@@ -192,7 +189,9 @@ class SensorPublisher:
                 if self._sampler is not None and self._engine is not None:
                     if sensor.grid_row is not None and sensor.grid_col is not None:
                         local_conditions = self._sampler(
-                            self._engine, sensor.grid_row, sensor.grid_col,
+                            self._engine,
+                            sensor.grid_row,
+                            sensor.grid_col,
                         )
 
                 event = sensor.emit(local_conditions)

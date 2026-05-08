@@ -1,4 +1,4 @@
-"""Tests for ogar.world.generic_grid — GenericTerrainGrid."""
+"""Tests for world-simiulator.world.generic_grid — GenericTerrainGrid."""
 
 import pytest
 

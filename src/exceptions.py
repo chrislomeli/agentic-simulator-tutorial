@@ -1,5 +1,5 @@
 """
-ogar.exceptions
+world-simiulator.exceptions
 
 Project-wide exception hierarchy.
 

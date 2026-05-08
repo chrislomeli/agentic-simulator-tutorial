@@ -1,4 +1,4 @@
-"""Tests for ogar.sensors.publisher — SensorPublisher async loop."""
+"""Tests for world-simiulator.sensors.publisher — SensorPublisher async loop."""
 
 import asyncio
 

@@ -1,4 +1,4 @@
-"""Tests for ogar.transport.topics — topic names and helpers."""
+"""Tests for world-simiulator.transport.topics — topic names and helpers."""
 
 import pytest
 

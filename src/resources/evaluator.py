@@ -1,5 +1,5 @@
 """
-ogar.resources.evaluator
+world-simiulator.resources.evaluator
 
 Preparedness evaluator — are the right resources available within
 acceptable response times for the current fire potential level?
@@ -55,22 +55,25 @@ logger = logging.getLogger(__name__)
 # ── Severity levels ─────────────────────────────────────────────────────────
 # Maps directly from the sensor filter's scoring output.
 
+
 class SeverityLevel(StrEnum):
-    LOW      = "low"
+    LOW = "low"
     MODERATE = "moderate"
-    HIGH     = "high"
-    EXTREME  = "extreme"
+    HIGH = "high"
+    EXTREME = "extreme"
 
 
 class PreparednessPosture(StrEnum):
     """Overall readiness assessment for a cluster at a given severity."""
-    READY    = "READY"       # All SLA requirements met
-    DEGRADED = "DEGRADED"    # Some gaps, but partial coverage exists
-    CRITICAL = "CRITICAL"    # Most requirements unmet
-    UNABLE   = "UNABLE"      # No resources available at all
+
+    READY = "READY"  # All SLA requirements met
+    DEGRADED = "DEGRADED"  # Some gaps, but partial coverage exists
+    CRITICAL = "CRITICAL"  # Most requirements unmet
+    UNABLE = "UNABLE"  # No resources available at all
 
 
 # ── SLA table ───────────────────────────────────────────────────────────────
+
 
 @dataclass(frozen=True)
 class ResponseRequirement:
@@ -79,6 +82,7 @@ class ResponseRequirement:
 
     Frozen so these can live in a static table without mutation risk.
     """
+
     resource_type: str
     min_count: int
     max_response_minutes: float
@@ -112,6 +116,7 @@ DEFAULT_SLA: dict[SeverityLevel, list[ResponseRequirement]] = {
 
 # ── Configuration ───────────────────────────────────────────────────────────
 
+
 @dataclass
 class PreparednessConfig:
     """
@@ -127,6 +132,7 @@ class PreparednessConfig:
     critical_ratio   : If (gaps / total_requirements) exceeds this,
                        posture is CRITICAL instead of DEGRADED.
     """
+
     minutes_per_cell: float = 5.0
     sla_table: dict[SeverityLevel, list[ResponseRequirement]] = field(
         default_factory=lambda: dict(DEFAULT_SLA),
@@ -139,12 +145,14 @@ DEFAULT_PREPAREDNESS_CONFIG = PreparednessConfig()
 
 # ── Gap detail ──────────────────────────────────────────────────────────────
 
+
 @dataclass
 class ResourceGap:
     """One unmet requirement in the SLA."""
+
     requirement: ResponseRequirement
     available_count: int
-    nearest_minutes: float | None   # None if no resources of this type exist
+    nearest_minutes: float | None  # None if no resources of this type exist
 
     @property
     def shortfall(self) -> int:
@@ -154,8 +162,7 @@ class ResourceGap:
     def reason(self) -> str:
         if self.available_count == 0:
             return (
-                f"no {self.requirement.resource_type} available "
-                f"(need {self.requirement.min_count})"
+                f"no {self.requirement.resource_type} available (need {self.requirement.min_count})"
             )
         if self.available_count < self.requirement.min_count:
             return (
@@ -172,6 +179,7 @@ class ResourceGap:
 
 # ── Evaluation result ───────────────────────────────────────────────────────
 
+
 @dataclass
 class PreparednessResult:
     """
@@ -180,6 +188,7 @@ class PreparednessResult:
     Includes the posture assessment, all met/unmet requirements, and
     a human-readable summary suitable for logging or LLM context.
     """
+
     cluster_id: str
     severity: SeverityLevel
     posture: PreparednessPosture
@@ -213,6 +222,7 @@ class PreparednessResult:
 
 # ── Response time estimation ────────────────────────────────────────────────
 
+
 def _estimate_response_minutes(
     resource: ResourceBase,
     target_row: int,
@@ -235,6 +245,7 @@ def _estimate_response_minutes(
 
 
 # ── Severity mapping ───────────────────────────────────────────────────────
+
 
 def severity_from_score(score: float, trigger_threshold: float = 2.0) -> SeverityLevel:
     """
@@ -259,6 +270,7 @@ def severity_from_score(score: float, trigger_threshold: float = 2.0) -> Severit
 
 
 # ── Main evaluator ──────────────────────────────────────────────────────────
+
 
 def evaluate_preparedness(
     severity: SeverityLevel,
@@ -310,8 +322,7 @@ def evaluate_preparedness(
         # Also consider resources from other clusters that could respond
         # (mobile resources only — they can relocate)
         all_typed = [
-            r for r in inventory.by_type(req.resource_type)
-            if r.status == ResourceStatus.AVAILABLE
+            r for r in inventory.by_type(req.resource_type) if r.status == ResourceStatus.AVAILABLE
         ]
 
         # Sort by response time to the target
@@ -327,11 +338,13 @@ def evaluate_preparedness(
         if len(reachable) >= req.min_count:
             met.append(req)
         else:
-            gaps.append(ResourceGap(
-                requirement=req,
-                available_count=len(reachable),
-                nearest_minutes=nearest_minutes,
-            ))
+            gaps.append(
+                ResourceGap(
+                    requirement=req,
+                    available_count=len(reachable),
+                    nearest_minutes=nearest_minutes,
+                )
+            )
 
     # Determine posture
     if not requirements:

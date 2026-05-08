@@ -1,5 +1,5 @@
 """
-ogar.world.generic_grid
+world-simiulator.world.generic_grid
 
 GenericTerrainGrid — a domain-agnostic 3D grid of GenericCell objects.
 
@@ -75,9 +75,7 @@ class GenericTerrainGrid(Generic[C]):
                                 Typically physics_module.initial_cell_state.
         """
         if rows < 1 or cols < 1 or layers < 1:
-            raise ValueError(
-                f"Grid dimensions must be positive, got ({rows}, {cols}, {layers})"
-            )
+            raise ValueError(f"Grid dimensions must be positive, got ({rows}, {cols}, {layers})")
         self.rows = rows
         self.cols = cols
         self.layers = layers
@@ -85,7 +83,9 @@ class GenericTerrainGrid(Generic[C]):
             [
                 [
                     GenericCell(
-                        row=r, col=c, layer=layer,
+                        row=r,
+                        col=c,
+                        layer=layer,
                         cell_state=initial_state_factory(r, c, layer),
                     )
                     for layer in range(layers)
@@ -101,8 +101,7 @@ class GenericTerrainGrid(Generic[C]):
 
         Raises IndexError if out of bounds.
         """
-        if not (0 <= row < self.rows and 0 <= col < self.cols
-                and 0 <= layer < self.layers):
+        if not (0 <= row < self.rows and 0 <= col < self.cols and 0 <= layer < self.layers):
             raise IndexError(
                 f"Cell ({row}, {col}, {layer}) out of bounds for grid "
                 f"({self.rows}×{self.cols}×{self.layers})"
@@ -110,7 +109,10 @@ class GenericTerrainGrid(Generic[C]):
         return self._cells[row][col][layer]
 
     def neighbors(
-        self, row: int, col: int, layer: int = 0,
+        self,
+        row: int,
+        col: int,
+        layer: int = 0,
     ) -> list[tuple[int, int, int]]:
         """
         Return the (row, col, layer) coordinates of all valid neighbors.
@@ -133,13 +135,16 @@ class GenericTerrainGrid(Generic[C]):
                     if dr == 0 and dc == 0 and dl == 0:
                         continue
                     nr, nc, nl = row + dr, col + dc, layer + dl
-                    if (0 <= nr < self.rows and 0 <= nc < self.cols
-                            and 0 <= nl < self.layers):
+                    if 0 <= nr < self.rows and 0 <= nc < self.cols and 0 <= nl < self.layers:
                         result.append((nr, nc, nl))
         return result
 
     def update_cell_state(
-        self, row: int, col: int, new_state: C, layer: int = 0,
+        self,
+        row: int,
+        col: int,
+        new_state: C,
+        layer: int = 0,
     ) -> None:
         """
         Replace the cell state at (row, col, layer).
@@ -168,11 +173,7 @@ class GenericTerrainGrid(Generic[C]):
               lambda c: c.cell_state.fire_state == FireState.BURNING
           )
         """
-        return [
-            (cell.row, cell.col, cell.layer)
-            for cell in self.iter_cells()
-            if predicate(cell)
-        ]
+        return [(cell.row, cell.col, cell.layer) for cell in self.iter_cells() if predicate(cell)]
 
     def snapshot(self) -> dict[str, Any]:
         """
@@ -188,10 +189,7 @@ class GenericTerrainGrid(Generic[C]):
             "layers": self.layers,
             "cells": [
                 [
-                    [
-                        self._cells[r][c][layer].to_dict()
-                        for layer in range(self.layers)
-                    ]
+                    [self._cells[r][c][layer].to_dict() for layer in range(self.layers)]
                     for c in range(self.cols)
                 ]
                 for r in range(self.rows)

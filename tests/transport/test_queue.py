@@ -1,4 +1,4 @@
-"""Tests for ogar.transport.queue — SensorEventQueue async."""
+"""Tests for world-simiulator.transport.queue — SensorEventQueue async."""
 
 import asyncio
 

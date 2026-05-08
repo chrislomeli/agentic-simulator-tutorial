@@ -1,4 +1,4 @@
-"""Tests for ogar.domains.wildfire.rothermel_physics."""
+"""Tests for world-simiulator.domains.wildfire.rothermel_physics."""
 
 import math
 import random
