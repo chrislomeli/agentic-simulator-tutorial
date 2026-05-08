@@ -1,5 +1,5 @@
 """
-ogar.domains
+world-simiulator.domains
 
 Domain-specific implementations that plug into the generic framework.
 
@@ -12,4 +12,10 @@ Each subdirectory is a self-contained domain package providing:
 
 Available domains:
   - wildfire : stochastic wildfire spread on a terrain grid
+
+This package is intentionally a namespace — each domain owns its own
+public API under ``domains.<name>``. Importing ``domains`` directly
+returns nothing; import the specific domain you need.
 """
+
+__all__: list[str] = []

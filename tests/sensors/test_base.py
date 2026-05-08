@@ -1,4 +1,4 @@
-"""Tests for ogar.sensors.base — SensorBase, FailureMode, emit."""
+"""Tests for world-simiulator.sensors.base — SensorBase, FailureMode, emit."""
 
 from sensors.base import SensorBase, FailureMode
 from transport import SensorEvent

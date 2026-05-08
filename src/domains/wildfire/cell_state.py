@@ -1,5 +1,5 @@
 """
-ogar.domains.wildfire.cell_state
+world-simiulator.domains.wildfire.cell_state
 
 FireCellState — per-cell state for wildfire simulation.
 
@@ -12,7 +12,7 @@ This defines what data lives on each grid cell in a wildfire scenario:
   - fire_intensity: how hot the fire is (0.0–1.0)
   - fire_start_tick: when the fire started in this cell
 
-TerrainType and FireState enums are imported from ogar.world.grid
+TerrainType and FireState enums are imported from world-simiulator.world.grid
 (their original home) and re-exported here so that domain code can
 import everything from one place.
 """
@@ -23,6 +23,7 @@ from world.cell_state import CellState
 from world.grid import FireState, TerrainType
 
 # ── Cell state ───────────────────────────────────────────────────────────────
+
 
 class FireCellState(CellState):
     """
@@ -94,21 +95,25 @@ class FireCellState(CellState):
         flame_length_ft           : Byram flame length at ignition (ft)
         fireline_intensity_btu_ft_s: Byram fireline intensity (BTU/ft/s)
         """
-        return self.model_copy(update={
-            "fire_state": FireState.BURNING,
-            "fire_intensity": max(0.0, min(1.0, intensity)),
-            "fire_start_tick": tick,
-            "rate_of_spread_ft_min": rate_of_spread_ft_min,
-            "flame_length_ft": flame_length_ft,
-            "fireline_intensity_btu_ft_s": fireline_intensity_btu_ft_s,
-        })
+        return self.model_copy(
+            update={
+                "fire_state": FireState.BURNING,
+                "fire_intensity": max(0.0, min(1.0, intensity)),
+                "fire_start_tick": tick,
+                "rate_of_spread_ft_min": rate_of_spread_ft_min,
+                "flame_length_ft": flame_length_ft,
+                "fireline_intensity_btu_ft_s": fireline_intensity_btu_ft_s,
+            }
+        )
 
     def extinguished(self) -> FireCellState:
         """Return a new state with the fire burned out. Zeros out fire behavior metrics."""
-        return self.model_copy(update={
-            "fire_state": FireState.BURNED,
-            "fire_intensity": 0.0,
-            "rate_of_spread_ft_min": 0.0,
-            "flame_length_ft": 0.0,
-            "fireline_intensity_btu_ft_s": 0.0,
-        })
+        return self.model_copy(
+            update={
+                "fire_state": FireState.BURNED,
+                "fire_intensity": 0.0,
+                "rate_of_spread_ft_min": 0.0,
+                "flame_length_ft": 0.0,
+                "fireline_intensity_btu_ft_s": 0.0,
+            }
+        )

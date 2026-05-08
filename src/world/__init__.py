@@ -1,5 +1,5 @@
 """
-ogar.world
+world-simiulator.world
 
 The world engine — maintains ground truth that sensors sample from.
 
@@ -39,14 +39,14 @@ from world.sensor_inventory import SensorInventory as SensorInventory
 
 __all__ = [
     "CellState",
-    "GenericCell",
     "EnvironmentState",
-    "GenericGroundTruthSnapshot",
-    "GenericWorldEngine",
-    "GenericTerrainGrid",
     "FireState",
-    "TerrainType",
+    "GenericCell",
+    "GenericGroundTruthSnapshot",
+    "GenericTerrainGrid",
+    "GenericWorldEngine",
     "PhysicsModule",
-    "StateEvent",
     "SensorInventory",
+    "StateEvent",
+    "TerrainType",
 ]

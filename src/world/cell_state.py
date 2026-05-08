@@ -1,5 +1,5 @@
 """
-ogar.world.cell_state
+world-simiulator.world.cell_state
 
 Abstract base class for domain-specific cell states and a generic cell container.
 
@@ -32,6 +32,7 @@ from pydantic import BaseModel
 
 # ── CellState ABC ────────────────────────────────────────────────────────────
 
+
 class CellState(BaseModel, ABC):
     """
     Base class for all domain-specific cell states.
@@ -49,9 +50,9 @@ class CellState(BaseModel, ABC):
           def summary_label(self) -> str:
               return self.fire_state.value
     """
+
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(row={self.row}, col={self.col})"
-
 
     @abstractmethod
     def summary_label(self) -> str:
@@ -66,12 +67,15 @@ class CellState(BaseModel, ABC):
         ...
 
 
+# ── GenericCell ──────────────────────────────────────────────────────────────
+
 # ── Type variable bound to CellState ─────────────────────────────────────────
+# Defined here (alongside CellState) so other modules can import both from a
+# single source. Avoids the circular-import trap that arises if the TypeVar
+# lives in a separate module that itself imports CellState.
 
 C = TypeVar("C", bound=CellState)
 
-
-# ── GenericCell ──────────────────────────────────────────────────────────────
 
 class GenericCell(Generic[C]):
     """

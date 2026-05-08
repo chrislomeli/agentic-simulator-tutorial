@@ -1,5 +1,5 @@
 """
-ogar.domains.wildfire.environment
+world-simiulator.domains.wildfire.environment
 
 FireEnvironmentState — weather conditions for wildfire simulation.
 
@@ -7,7 +7,7 @@ This is the wildfire domain's implementation of EnvironmentState.
 It models temperature, humidity, wind, and pressure with correlated
 random-walk drift per tick.
 
-Ported from ogar.world.weather.WeatherState — same logic, now
+Ported from world-simiulator.world.weather.WeatherState — same logic, now
 implementing the EnvironmentState ABC.
 
 Weather evolves each tick via bounded random walk:
@@ -68,9 +68,7 @@ class FireEnvironmentState(EnvironmentState):
         """
         # ── Temperature drift ─────────────────────────────────────
         temp_step = random.uniform(-self.temp_drift, self.temp_drift)
-        self.temperature_c = self._clamp(
-            self.temperature_c + temp_step, 15.0, 50.0
-        )
+        self.temperature_c = self._clamp(self.temperature_c + temp_step, 15.0, 50.0)
 
         # ── Humidity drift (inversely correlated with temperature) ─
         humidity_correlation = -temp_step * 0.6
@@ -81,9 +79,7 @@ class FireEnvironmentState(EnvironmentState):
 
         # ── Wind speed drift ──────────────────────────────────────
         wind_step = random.uniform(-self.wind_speed_drift, self.wind_speed_drift)
-        self.wind_speed_mps = self._clamp(
-            self.wind_speed_mps + wind_step, 0.0, 30.0
-        )
+        self.wind_speed_mps = self._clamp(self.wind_speed_mps + wind_step, 0.0, 30.0)
 
         # ── Wind direction drift (wraps at 360°) ─────────────────
         dir_step = random.uniform(-self.wind_direction_drift, self.wind_direction_drift)
@@ -105,8 +101,8 @@ class FireEnvironmentState(EnvironmentState):
         (decreasing row), so the vector is (-1, 0).
         """
         rad = math.radians(self.wind_direction_deg)
-        row_delta = -math.cos(rad)   # north component
-        col_delta = math.sin(rad)    # east component
+        row_delta = -math.cos(rad)  # north component
+        col_delta = math.sin(rad)  # east component
         return (row_delta, col_delta)
 
     def to_dict(self) -> dict[str, Any]:

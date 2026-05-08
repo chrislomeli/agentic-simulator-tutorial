@@ -30,11 +30,27 @@ dependencies = [
     "langchain-openai>=1.1.12",
     "langchain-anthropic>=1.4.0",
     "ipykernel>=7.2.0",
+    "structlog>=25.5.0",
+    "jinja2>=3.1.6",
+    "pyyaml>=6.0.3",
+    "langchain-ollama>=1.1.0",
+    "numpy>=2.4.4",
+    "scipy>=1.17.1",
+    "scipy-stubs~=1.17.1",
+    "geopandas>=1.1.3",
 ]
 
 [project.optional-dependencies]
 llm = [
     "langchain-openai>=0.2",
+]
+# Heavy geospatial stack used only by build-fuel-grid to
+# regenerate the vendored LANDFIRE fuel grid. Not needed at runtime.
+gis = [
+    "rasterio>=1.3",
+    "geopandas>=0.14",
+    "pyproj>=3.6",
+    "shapely>=2.0",
 ]
 
 [dependency-groups]
@@ -62,13 +78,18 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["agents", "bridge", "config", "domains", "resources", "sensors", "tools", "transport", "world"]
+known-first-party = ["agents", "bridge", "config", "domains", "resources", "runtime", "sensors", "tools", "transport", "world"]
+
+[project.scripts]
+build-fuel-grid = "domains.wildfire.world_builder.cli.build_fuel_grid:main"
+build-scenario = "domains.wildfire.world_builder.cli.build_scenario:main"
+fetch-raws-stations = "domains.wildfire.world_builder.cli.fetch_raws_stations:main"
 
 [project.urls]
 Homepage = "https://github.com/chrislomeli/world-simulator"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/sensors", "src/tools", "src/domains", "src/transport", "src/bridge", "src/world", "src/agents", "src/resources"]
+packages = ["src/sensors", "src/tools", "src/domains", "src/transport", "src/bridge", "src/world", "src/agents", "src/resources", "src/runtime"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

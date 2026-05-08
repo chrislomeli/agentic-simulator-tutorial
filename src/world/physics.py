@@ -1,5 +1,5 @@
 """
-ogar.world.physics
+world-simiulator.world.physics
 
 Abstract base class for domain-specific physics modules and the
 StateEvent data class.
@@ -51,6 +51,7 @@ C = TypeVar("C", bound=CellState)
 
 # ── StateEvent ───────────────────────────────────────────────────────────────
 
+
 @dataclass
 class StateEvent(Generic[C]):
     """
@@ -62,6 +63,7 @@ class StateEvent(Generic[C]):
     row, col, layer : which cell changed
     new_state       : the complete new CellState for that cell
     """
+
     row: int
     col: int
     new_state: C
@@ -69,6 +71,7 @@ class StateEvent(Generic[C]):
 
 
 # ── PhysicsModule ABC ────────────────────────────────────────────────────────
+
 
 class PhysicsModule(ABC, Generic[C]):
     """

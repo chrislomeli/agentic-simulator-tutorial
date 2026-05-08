@@ -1,5 +1,5 @@
 """
-ogar.domains.wildfire.scenarios
+world-simiulator.domains.wildfire.scenarios
 
 Pre-built wildfire scenarios using the generic engine + fire domain.
 
@@ -63,6 +63,7 @@ def create_basic_wildfire(
     """
     if use_rothermel:
         from domains.wildfire.rothermel_physics import RothermelFirePhysicsModule
+
         physics = RothermelFirePhysicsModule(
             cell_size_ft=cell_size_ft,
             time_step_min=time_step_min,
@@ -77,16 +78,21 @@ def create_basic_wildfire(
     # ── Build grid with custom initial states ─────────────────────
     # We use the default factory first, then overwrite cells.
     grid = GenericTerrainGrid(
-        rows=10, cols=10,
+        rows=10,
+        cols=10,
         initial_state_factory=physics.initial_cell_state,
     )
 
     # ── North: lake (north-west corner) ───────────────────────────
     for r in range(2):
-        grid.update_cell_state(r, 0, FireCellState(
-            terrain_type=TerrainType.WATER,
-            vegetation=0.0,
-        ))
+        grid.update_cell_state(
+            r,
+            0,
+            FireCellState(
+                terrain_type=TerrainType.WATER,
+                vegetation=0.0,
+            ),
+        )
 
     # ── North: forest (rows 0–3) ─────────────────────────────────
     for r in range(4):
@@ -94,45 +100,65 @@ def create_basic_wildfire(
             current = grid.get_cell(r, c).cell_state
             if current.terrain_type == TerrainType.WATER:
                 continue
-            grid.update_cell_state(r, c, FireCellState(
-                terrain_type=TerrainType.FOREST,
-                vegetation=0.85,
-                fuel_moisture=0.3,
-                slope=5.0,  # slight uphill in the north
-            ))
+            grid.update_cell_state(
+                r,
+                c,
+                FireCellState(
+                    terrain_type=TerrainType.FOREST,
+                    vegetation=0.85,
+                    fuel_moisture=0.3,
+                    slope=5.0,  # slight uphill in the north
+                ),
+            )
 
     # ── Middle: rock ridge (row 4) ────────────────────────────────
     for c in range(10):
         if c in (6, 7):
             # Gap in the ridge — scrub, fire might jump through.
-            grid.update_cell_state(4, c, FireCellState(
-                terrain_type=TerrainType.SCRUB,
-                vegetation=0.4,
-                fuel_moisture=0.2,
-            ))
+            grid.update_cell_state(
+                4,
+                c,
+                FireCellState(
+                    terrain_type=TerrainType.SCRUB,
+                    vegetation=0.4,
+                    fuel_moisture=0.2,
+                ),
+            )
         else:
-            grid.update_cell_state(4, c, FireCellState(
-                terrain_type=TerrainType.ROCK,
-                vegetation=0.0,
-            ))
+            grid.update_cell_state(
+                4,
+                c,
+                FireCellState(
+                    terrain_type=TerrainType.ROCK,
+                    vegetation=0.0,
+                ),
+            )
 
     # ── South: grassland (rows 5–9) ──────────────────────────────
     for r in range(5, 10):
         for c in range(10):
-            grid.update_cell_state(r, c, FireCellState(
-                terrain_type=TerrainType.GRASSLAND,
-                vegetation=0.6,
-                fuel_moisture=0.15,
-            ))
+            grid.update_cell_state(
+                r,
+                c,
+                FireCellState(
+                    terrain_type=TerrainType.GRASSLAND,
+                    vegetation=0.6,
+                    fuel_moisture=0.15,
+                ),
+            )
 
     # ── South-east: urban area ────────────────────────────────────
     for r in (7, 8):
         for c in (8, 9):
-            grid.update_cell_state(r, c, FireCellState(
-                terrain_type=TerrainType.URBAN,
-                vegetation=0.1,
-                fuel_moisture=0.05,
-            ))
+            grid.update_cell_state(
+                r,
+                c,
+                FireCellState(
+                    terrain_type=TerrainType.URBAN,
+                    vegetation=0.1,
+                    fuel_moisture=0.05,
+                ),
+            )
 
     # ── Weather: hot, dry, south-west wind ────────────────────────
     environment = FireEnvironmentState(
@@ -196,144 +222,168 @@ def create_wildfire_resources(grid_rows: int = 10, grid_cols: int = 10) -> Resou
     inventory = ResourceInventory(grid_rows=grid_rows, grid_cols=grid_cols)
 
     # ── Hotshot crew (IHC, C-1) ───────────────────────────────────
-    inventory.register(ResourceBase(
-        resource_id="crew-south-1",
-        resource_type="crew",
-        cluster_id="cluster-south",
-        grid_row=9, grid_col=1,
-        capacity=1.0,   # 1 crew unit (20-person)
-        available=1.0,
-        mobile=True,
-        metadata={
-            "nwcg_id": "C-1",
-            "nwcg_type": 1,
-            "name": "Interagency Hotshot Crew (IHC)",
-            "unit": "20-person",
-            "production_rate_chains_hr": 15,
-            "category": "Personnel",
-        },
-    ))
+    inventory.register(
+        ResourceBase(
+            resource_id="crew-south-1",
+            resource_type="crew",
+            cluster_id="cluster-south",
+            grid_row=9,
+            grid_col=1,
+            capacity=1.0,  # 1 crew unit (20-person)
+            available=1.0,
+            mobile=True,
+            metadata={
+                "nwcg_id": "C-1",
+                "nwcg_type": 1,
+                "name": "Interagency Hotshot Crew (IHC)",
+                "unit": "20-person",
+                "production_rate_chains_hr": 15,
+                "category": "Personnel",
+            },
+        )
+    )
 
     # ── Hand crew (C-2) ───────────────────────────────────────────
-    inventory.register(ResourceBase(
-        resource_id="crew-south-2",
-        resource_type="crew",
-        cluster_id="cluster-south",
-        grid_row=9, grid_col=3,
-        capacity=1.0,
-        available=1.0,
-        mobile=True,
-        metadata={
-            "nwcg_id": "C-2",
-            "nwcg_type": 2,
-            "name": "Hand Crew",
-            "unit": "20-person",
-            "production_rate_chains_hr": 8,
-            "category": "Personnel",
-        },
-    ))
+    inventory.register(
+        ResourceBase(
+            resource_id="crew-south-2",
+            resource_type="crew",
+            cluster_id="cluster-south",
+            grid_row=9,
+            grid_col=3,
+            capacity=1.0,
+            available=1.0,
+            mobile=True,
+            metadata={
+                "nwcg_id": "C-2",
+                "nwcg_type": 2,
+                "name": "Hand Crew",
+                "unit": "20-person",
+                "production_rate_chains_hr": 8,
+                "category": "Personnel",
+            },
+        )
+    )
 
     # ── Wildland Engine SW (E-3) ──────────────────────────────────
-    inventory.register(ResourceBase(
-        resource_id="engine-south-1",
-        resource_type="engine",
-        cluster_id="cluster-south",
-        grid_row=9, grid_col=0,
-        capacity=500.0,
-        available=500.0,
-        mobile=True,
-        metadata={
-            "nwcg_id": "E-3",
-            "nwcg_type": 3,
-            "name": "Wildland Engine (4x4)",
-            "unit": "gallons",
-            "tank_gal": 500,
-            "pump_gpm": 150,
-            "category": "Equipment",
-        },
-    ))
+    inventory.register(
+        ResourceBase(
+            resource_id="engine-south-1",
+            resource_type="engine",
+            cluster_id="cluster-south",
+            grid_row=9,
+            grid_col=0,
+            capacity=500.0,
+            available=500.0,
+            mobile=True,
+            metadata={
+                "nwcg_id": "E-3",
+                "nwcg_type": 3,
+                "name": "Wildland Engine (4x4)",
+                "unit": "gallons",
+                "tank_gal": 500,
+                "pump_gpm": 150,
+                "category": "Equipment",
+            },
+        )
+    )
 
     # ── Wildland Engine SE (E-3) ──────────────────────────────────
-    inventory.register(ResourceBase(
-        resource_id="engine-south-2",
-        resource_type="engine",
-        cluster_id="cluster-south",
-        grid_row=9, grid_col=9,
-        capacity=500.0,
-        available=500.0,
-        mobile=True,
-        metadata={
-            "nwcg_id": "E-3",
-            "nwcg_type": 3,
-            "name": "Wildland Engine (4x4)",
-            "unit": "gallons",
-            "tank_gal": 500,
-            "pump_gpm": 150,
-            "category": "Equipment",
-        },
-    ))
+    inventory.register(
+        ResourceBase(
+            resource_id="engine-south-2",
+            resource_type="engine",
+            cluster_id="cluster-south",
+            grid_row=9,
+            grid_col=9,
+            capacity=500.0,
+            available=500.0,
+            mobile=True,
+            metadata={
+                "nwcg_id": "E-3",
+                "nwcg_type": 3,
+                "name": "Wildland Engine (4x4)",
+                "unit": "gallons",
+                "tank_gal": 500,
+                "pump_gpm": 150,
+                "category": "Equipment",
+            },
+        )
+    )
 
     # ── Heavy Dozer (D-1) ─────────────────────────────────────────
-    inventory.register(ResourceBase(
-        resource_id="dozer-south-1",
-        resource_type="dozer",
-        cluster_id="cluster-south",
-        grid_row=9, grid_col=5,
-        capacity=1.0,   # 1 dozer unit
-        available=1.0,
-        mobile=True,
-        metadata={
-            "nwcg_id": "D-1",
-            "nwcg_type": 1,
-            "name": "Heavy Dozer (D8/D7)",
-            "unit": "Vehicle",
-            "production_rate_chains_hr": 60,
-            "category": "Equipment",
-        },
-    ))
+    inventory.register(
+        ResourceBase(
+            resource_id="dozer-south-1",
+            resource_type="dozer",
+            cluster_id="cluster-south",
+            grid_row=9,
+            grid_col=5,
+            capacity=1.0,  # 1 dozer unit
+            available=1.0,
+            mobile=True,
+            metadata={
+                "nwcg_id": "D-1",
+                "nwcg_type": 1,
+                "name": "Heavy Dozer (D8/D7)",
+                "unit": "Vehicle",
+                "production_rate_chains_hr": 60,
+                "category": "Equipment",
+            },
+        )
+    )
 
     # ── Ambulance ─────────────────────────────────────────────────
-    inventory.register(ResourceBase(
-        resource_id="ambulance-1",
-        resource_type="ambulance",
-        cluster_id="cluster-south",
-        grid_row=8, grid_col=5,
-        capacity=2.0,
-        available=2.0,
-        mobile=True,
-        metadata={"unit": "patients", "crew_size": 2, "category": "Medical"},
-    ))
+    inventory.register(
+        ResourceBase(
+            resource_id="ambulance-1",
+            resource_type="ambulance",
+            cluster_id="cluster-south",
+            grid_row=8,
+            grid_col=5,
+            capacity=2.0,
+            available=2.0,
+            mobile=True,
+            metadata={"unit": "patients", "crew_size": 2, "category": "Medical"},
+        )
+    )
 
     # ── Hospital ──────────────────────────────────────────────────
-    inventory.register(ResourceBase(
-        resource_id="hospital-1",
-        resource_type="hospital",
-        cluster_id="cluster-south",
-        grid_row=7, grid_col=9,
-        capacity=50.0,
-        available=42.0,
-        mobile=False,
-        metadata={"unit": "beds", "trauma_center": True, "category": "Medical"},
-    ))
+    inventory.register(
+        ResourceBase(
+            resource_id="hospital-1",
+            resource_type="hospital",
+            cluster_id="cluster-south",
+            grid_row=7,
+            grid_col=9,
+            capacity=50.0,
+            available=42.0,
+            mobile=False,
+            metadata={"unit": "beds", "trauma_center": True, "category": "Medical"},
+        )
+    )
 
     # ── Heavy Helicopter (H-1) ────────────────────────────────────
-    inventory.register(ResourceBase(
-        resource_id="heli-1",
-        resource_type="helicopter",
-        cluster_id="cluster-north",
-        grid_row=0, grid_col=5,
-        capacity=700.0,
-        available=700.0,
-        mobile=True,
-        metadata={
-            "nwcg_id": "H-1",
-            "nwcg_type": 1,
-            "name": "Heavy Helicopter (Type 1)",
-            "unit": "gallons",
-            "capacity_gal": 700,
-            "category": "Aircraft",
-        },
-    ))
+    inventory.register(
+        ResourceBase(
+            resource_id="heli-1",
+            resource_type="helicopter",
+            cluster_id="cluster-north",
+            grid_row=0,
+            grid_col=5,
+            capacity=700.0,
+            available=700.0,
+            mobile=True,
+            metadata={
+                "nwcg_id": "H-1",
+                "nwcg_type": 1,
+                "name": "Heavy Helicopter (Type 1)",
+                "unit": "gallons",
+                "capacity_gal": 700,
+                "category": "Aircraft",
+            },
+        )
+    )
 
     return inventory
 

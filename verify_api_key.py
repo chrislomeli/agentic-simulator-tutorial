@@ -30,7 +30,7 @@ def check_settings():
             openai_api_key: str = ""
             langchain_api_key: str = ""
             langchain_tracing_v2: bool = False
-            langchain_project: str = "ogar"
+            langchain_project: str = "world-simiulator"
             model_config = SettingsConfigDict(
                 env_file=os.getenv("AI_ENV_FILE"),
                 env_file_encoding="utf-8",

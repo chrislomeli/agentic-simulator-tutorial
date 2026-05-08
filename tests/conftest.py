@@ -1,5 +1,5 @@
 """
-Shared fixtures for all ogar tests.
+Shared fixtures for all world-simiulator tests.
 
 Seeding random ensures deterministic results across all test modules.
 """

@@ -3,6 +3,7 @@
 __pycache__/
 *.py[cod]
 *.pyo
+*.tif
 *.pyd
 *.egg
 *.egg-info/

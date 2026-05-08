@@ -1,5 +1,5 @@
 """
-ogar.domains.wildfire.physics
+world-simiulator.domains.wildfire.physics
 
 SimpleFirePhysicsModule — heuristic fire spread model (placeholder).
 
@@ -89,9 +89,7 @@ class SimpleFirePhysicsModule(PhysicsModule[FireCellState]):
         humidity_factor = self._compute_humidity_factor(environment.humidity_pct)
 
         # Find all currently burning cells.
-        burning = grid.cells_where(
-            lambda c: c.cell_state.fire_state == FireState.BURNING
-        )
+        burning = grid.cells_where(lambda c: c.cell_state.fire_state == FireState.BURNING)
 
         # Track cells ignited this tick to avoid double-ignition.
         newly_ignited: set[tuple[int, int, int]] = set()
@@ -104,10 +102,13 @@ class SimpleFirePhysicsModule(PhysicsModule[FireCellState]):
             if state.fire_start_tick is not None:
                 ticks_burning = tick - state.fire_start_tick
                 if ticks_burning >= self._burn_duration:
-                    events.append(StateEvent(
-                        row=row, col=col,
-                        new_state=state.extinguished(),
-                    ))
+                    events.append(
+                        StateEvent(
+                            row=row,
+                            col=col,
+                            new_state=state.extinguished(),
+                        )
+                    )
                     continue
 
             # ── Try to spread to each burnable neighbor ───────────
@@ -122,30 +123,34 @@ class SimpleFirePhysicsModule(PhysicsModule[FireCellState]):
                     continue
 
                 prob = self._spread_probability(
-                    row, col, nr, nc,
-                    state, neighbor_state,
-                    wind_row, wind_col,
+                    row,
+                    col,
+                    nr,
+                    nc,
+                    state,
+                    neighbor_state,
+                    wind_row,
+                    wind_col,
                     environment.wind_speed_mps,
                     humidity_factor,
                 )
 
                 if random.random() < prob:
-                    new_intensity = min(
-                        1.0, state.fire_intensity * neighbor_state.vegetation * 1.2
-                    )
+                    new_intensity = min(1.0, state.fire_intensity * neighbor_state.vegetation * 1.2)
                     new_intensity = max(0.1, new_intensity)
 
-                    events.append(StateEvent(
-                        row=nr, col=nc,
-                        new_state=neighbor_state.ignited(tick, new_intensity),
-                    ))
+                    events.append(
+                        StateEvent(
+                            row=nr,
+                            col=nc,
+                            new_state=neighbor_state.ignited(tick, new_intensity),
+                        )
+                    )
                     newly_ignited.add((nr, nc, _nl))
 
         return events
 
-    def summarize(
-        self, grid: GenericTerrainGrid[FireCellState]
-    ) -> dict[str, Any]:
+    def summarize(self, grid: GenericTerrainGrid[FireCellState]) -> dict[str, Any]:
         """
         Return a fire-specific summary of the grid.
 
@@ -175,11 +180,14 @@ class SimpleFirePhysicsModule(PhysicsModule[FireCellState]):
 
     def _spread_probability(
         self,
-        from_row: int, from_col: int,
-        to_row: int, to_col: int,
+        from_row: int,
+        from_col: int,
+        to_row: int,
+        to_col: int,
         from_state: FireCellState,
         to_state: FireCellState,
-        wind_row: float, wind_col: float,
+        wind_row: float,
+        wind_col: float,
         wind_speed: float,
         humidity_factor: float,
     ) -> float:

@@ -1,5 +1,5 @@
 """
-ogar.domains.wildfire.scenario_loader
+world-simiulator.domains.wildfire.scenario_loader
 
 Load a wildfire scenario from a JSON file and return the three objects
 the pipeline needs:
@@ -27,6 +27,18 @@ Cells can contain:
   - all three at once (the whole point: everything at a position is together)
 
 Keys starting with "__comment" are ignored (used for documentation in JSON).
+
+Geo overlay
+───────────
+Every cell is stamped with real-world lat/lon coordinates derived from the
+grid position using agents.commons.geo.grid_to_latlon. Coordinates are
+stored in GenericCell.attributes["lat"] and GenericCell.attributes["lon"]
+so that agent tools (NASA FIRMS, NOAA HRRR, USGS elevation) can be called
+with real coordinates without any runtime conversion.
+
+The default bounding box is southern Los Padres National Forest
+(Ventura/Santa Barbara counties). Pass a different bounds dict to
+load_scenario_from_json to overlay on a different region.
 """
 
 from __future__ import annotations
@@ -36,6 +48,11 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from agents.commons.geo import (
+    LPNF_SOUTH,
+    cell_size_miles,
+    grid_to_latlon,
+)
 from domains.wildfire.cell_state import FireCellState, TerrainType
 from domains.wildfire.environment import FireEnvironmentState
 from domains.wildfire.sensors import (
@@ -70,6 +87,23 @@ _SENSOR_CLASSES: dict[str, type] = {
 # ── Terrain type lookup ──────────────────────────────────────────────────────
 
 _TERRAIN_LOOKUP: dict[str, TerrainType] = {t.value: t for t in TerrainType}
+
+
+def _resolve_bounds(spec: dict | None, fallback: dict) -> dict:
+    """
+    Resolve the scenario's bounding box.
+
+    The JSON `bounds` value must be a dict with the four edge keys, or absent
+    (fallback is used). Build-time tooling (build-scenario CLI) is responsible
+    for embedding the dict — string region names are not supported at runtime.
+    """
+    if spec is None:
+        return fallback
+    required = {"lat_min", "lat_max", "lon_min", "lon_max"}
+    missing = required - set(spec)
+    if missing:
+        raise ValueError(f"Scenario `bounds` dict is missing keys: {sorted(missing)}")
+    return spec
 
 
 def _parse_cell_key(key: str) -> tuple[int, int, int]:
@@ -127,13 +161,18 @@ def _build_resource(spec: dict[str, Any], row: int, col: int) -> ResourceBase:
 
 def load_scenario_from_json(
     path: str | Path,
+    bounds: dict = LPNF_SOUTH,
 ) -> tuple[GenericWorldEngine[FireCellState], SensorInventory, ResourceInventory]:
     """
     Load a wildfire scenario from a JSON file.
 
     Parameters
     ──────────
-    path : Path to the JSON scenario file.
+    path   : Path to the JSON scenario file.
+    bounds : Geographic bounding box to overlay the grid onto.
+             Defaults to southern Los Padres National Forest.
+             Pass a different dict with lat_min/lat_max/lon_min/lon_max
+             to overlay on a different region.
 
     Returns
     ───────
@@ -155,17 +194,32 @@ def load_scenario_from_json(
     name = data.get("name", path.stem)
     logger.info("Loading scenario '%s' from %s", name, path)
 
+    # ── Bounds ───────────────────────────────────────────────────
+    # A scenario may declare its own geographic region inline (preferred —
+    # keeps the file self-describing). The function-arg `bounds` is a
+    # fallback used only when the JSON does not declare anything.
+    bounds = _resolve_bounds(data.get("bounds"), bounds)
+
     # ── Dimensions ───────────────────────────────────────────────
     dims = data["dimensions"]
     rows = dims["rows"]
     cols = dims["cols"]
     layers = dims.get("layers", 1)
 
+    # ── Log geo overlay resolution ───────────────────────────────
+    lat_miles, lon_miles = cell_size_miles(rows, cols, bounds)
+    logger.info(
+        "Grid overlaid on '%s' — %dx%d cells, each ~%.1f x %.1f miles",
+        name,
+        rows,
+        cols,
+        lat_miles,
+        lon_miles,
+    )
+
     # ── Defaults ─────────────────────────────────────────────────
     defaults = data.get("defaults", {})
-    default_terrain = _TERRAIN_LOOKUP.get(
-        defaults.get("terrain", "FOREST"), TerrainType.FOREST
-    )
+    default_terrain = _TERRAIN_LOOKUP.get(defaults.get("terrain", "FOREST"), TerrainType.FOREST)
     default_vegetation = defaults.get("vegetation", 0.8)
     default_fuel_moisture = defaults.get("fuel_moisture", 0.3)
     default_slope = defaults.get("slope", 0.0)
@@ -179,6 +233,7 @@ def load_scenario_from_json(
 
     if use_rothermel:
         from domains.wildfire.rothermel_physics import RothermelFirePhysicsModule
+
         physics = RothermelFirePhysicsModule(
             cell_size_ft=cell_size_ft,
             time_step_min=time_step_min,
@@ -186,6 +241,7 @@ def load_scenario_from_json(
         )
     else:
         from domains.wildfire.physics import SimpleFirePhysicsModule
+
         physics = SimpleFirePhysicsModule(
             base_probability=0.15,
             burn_duration_ticks=burn_duration_ticks,
@@ -193,20 +249,36 @@ def load_scenario_from_json(
 
     # ── Build grid with defaults ─────────────────────────────────
     grid = GenericTerrainGrid(
-        rows=rows, cols=cols, layers=layers,
+        rows=rows,
+        cols=cols,
+        layers=layers,
         initial_state_factory=physics.initial_cell_state,
     )
 
-    # Apply default terrain to all cells
+    # Apply default terrain to all cells and stamp real-world coordinates.
+    # Every cell gets lat/lon in attributes regardless of whether it appears
+    # in the sparse cells dict — coordinates are always derivable from position.
     for r in range(rows):
         for c in range(cols):
             for lay in range(layers):
-                grid.update_cell_state(r, c, FireCellState(
-                    terrain_type=default_terrain,
-                    vegetation=default_vegetation,
-                    fuel_moisture=default_fuel_moisture,
-                    slope=default_slope,
-                ), layer=lay)
+                grid.update_cell_state(
+                    r,
+                    c,
+                    FireCellState(
+                        terrain_type=default_terrain,
+                        vegetation=default_vegetation,
+                        fuel_moisture=default_fuel_moisture,
+                        slope=default_slope,
+                    ),
+                    layer=lay,
+                )
+
+                # stamp real-world coordinates into GenericCell.attributes
+                # these are the source of truth for all external API calls
+                latlon = grid_to_latlon(r, c, rows, cols, bounds)
+                cell = grid.get_cell(r, c, lay)
+                cell.attributes["lat"] = latlon.lat
+                cell.attributes["lon"] = latlon.lon
 
     # ── Environment ──────────────────────────────────────────────
     env_cfg = data.get("environment", {})
@@ -220,7 +292,9 @@ def load_scenario_from_json(
 
     # ── Process sparse cells ─────────────────────────────────────
     sensor_inventory = SensorInventory(
-        grid_rows=rows, grid_cols=cols, grid_layers=layers,
+        grid_rows=rows,
+        grid_cols=cols,
+        grid_layers=layers,
     )
     resource_inventory = ResourceInventory(grid_rows=rows, grid_cols=cols)
 
@@ -238,12 +312,11 @@ def load_scenario_from_json(
 
         # Validate bounds
         if not (0 <= row < rows and 0 <= col < cols and 0 <= layer < layers):
-            raise ValueError(
-                f"Cell key '{key}' is out of bounds for grid "
-                f"({rows}×{cols}×{layers})"
-            )
+            raise ValueError(f"Cell key '{key}' is out of bounds for grid ({rows}×{cols}×{layers})")
 
         # ── Terrain override ─────────────────────────────────────
+        # Coordinates are already stamped from the default pass above.
+        # We only need to update cell_state — attributes are preserved.
         if "terrain" in cell_data:
             terrain = _TERRAIN_LOOKUP.get(cell_data["terrain"])
             if terrain is None:
@@ -251,12 +324,17 @@ def load_scenario_from_json(
                     f"Unknown terrain '{cell_data['terrain']}' at {key}. "
                     f"Known: {list(_TERRAIN_LOOKUP.keys())}"
                 )
-            grid.update_cell_state(row, col, FireCellState(
-                terrain_type=terrain,
-                vegetation=cell_data.get("vegetation", default_vegetation),
-                fuel_moisture=cell_data.get("fuel_moisture", default_fuel_moisture),
-                slope=cell_data.get("slope", default_slope),
-            ), layer=layer)
+            grid.update_cell_state(
+                row,
+                col,
+                FireCellState(
+                    terrain_type=terrain,
+                    vegetation=cell_data.get("vegetation", default_vegetation),
+                    fuel_moisture=cell_data.get("fuel_moisture", default_fuel_moisture),
+                    slope=cell_data.get("slope", default_slope),
+                ),
+                layer=layer,
+            )
             terrain_overrides += 1
 
         # ── Sensors ──────────────────────────────────────────────
@@ -266,7 +344,10 @@ def load_scenario_from_json(
             if cell.cell_state.terrain_type == TerrainType.WATER:
                 logger.warning(
                     "Sensor '%s' placed in WATER at (%d,%d,%d) — skipping",
-                    sensor_spec.get("id", "?"), row, col, layer,
+                    sensor_spec.get("id", "?"),
+                    row,
+                    col,
+                    layer,
                 )
                 continue
 
@@ -294,15 +375,22 @@ def load_scenario_from_json(
         lay = ign.get("layer", 0)
         intensity = ign.get("intensity", 0.8)
         ignition_state = grid.get_cell(r, c, lay).cell_state.ignited(
-            tick=0, intensity=intensity,
+            tick=0,
+            intensity=intensity,
         )
         engine.inject_state(r, c, ignition_state)
 
     logger.info(
         "Scenario '%s' loaded: %dx%dx%d grid, %d terrain overrides, "
         "%d sensors, %d resources, %d ignition point(s)",
-        name, rows, cols, layers, terrain_overrides,
-        sensor_count, resource_count, len(data.get("ignition", [])),
+        name,
+        rows,
+        cols,
+        layers,
+        terrain_overrides,
+        sensor_count,
+        resource_count,
+        len(data.get("ignition", [])),
     )
 
     return engine, sensor_inventory, resource_inventory
@@ -310,6 +398,7 @@ def load_scenario_from_json(
 
 def load_scenario_from_package(
     scenario_name: str = "north_south_fire",
+    bounds: dict = LPNF_SOUTH,
 ) -> tuple[GenericWorldEngine[FireCellState], SensorInventory, ResourceInventory]:
     """
     Convenience function to load a scenario from the built-in scenario_data/ directory.
@@ -317,6 +406,7 @@ def load_scenario_from_package(
     Parameters
     ──────────
     scenario_name : Name of the scenario file (without .json extension).
+    bounds        : Geographic bounding box. Defaults to southern Los Padres.
 
     Returns
     ───────
@@ -324,4 +414,4 @@ def load_scenario_from_package(
     """
     scenario_dir = Path(__file__).parent / "scenario_data"
     path = scenario_dir / f"{scenario_name}.json"
-    return load_scenario_from_json(path)
+    return load_scenario_from_json(path, bounds=bounds)
