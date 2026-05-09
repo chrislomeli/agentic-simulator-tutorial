@@ -64,7 +64,7 @@ class CoverageIndex:
                        up to 2 cells away with linearly decayed strength.
         """
         self._inventory = inventory
-        self._decay_radius = decay_radius
+        self.decay_radius = decay_radius
 
     @property
     def inventory(self) -> SensorInventory:
@@ -112,8 +112,8 @@ class CoverageIndex:
         distance = math.sqrt((pos.row - cell_row) ** 2 + (pos.col - cell_col) ** 2)
         if distance == 0.0:
             return sensor_confidence
-        if distance >= self._decay_radius:
+        if distance >= self.decay_radius:
             return 0.0
 
-        decay = 1.0 - (distance / self._decay_radius)
+        decay = 1.0 - (distance / self.decay_radius)
         return sensor_confidence * decay

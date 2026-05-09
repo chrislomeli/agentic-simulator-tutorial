@@ -466,8 +466,8 @@ class CellStateManager:
                             (home_pos.row - target_pos.row) ** 2
                             + (home_pos.col - target_pos.col) ** 2
                         )
-                        if dist < self._coverage._decay_radius:
-                            decay = 1.0 - (dist / self._coverage._decay_radius)
+                        if dist < self._coverage.decay_radius:
+                            decay = 1.0 - (dist / self._coverage.decay_radius)
                             strength = event.confidence * decay
                 else:
                     strength = event.confidence
@@ -569,7 +569,7 @@ class CellStateManager:
         seen: set[tuple[int, int]] = set()
         records_by_cluster: dict[str, list[CollatedRecord]] = {}
 
-        for tr, tc in center_positions:
+        for (tr, tc) in center_positions:
             for r in range(tr - 1, tr + 2):
                 for c in range(tc - 1, tc + 2):
                     if (r, c) in seen:
@@ -596,7 +596,7 @@ class CellStateManager:
         Called after snapshot_halo() so future evaluations compute deltas
         relative to the state the LLM actually saw.
         """
-        for r, c in positions:
+        for (r, c) in positions:
             snap = self._cells.get((r, c))
             if snap and snap.metrics:
                 snap.mark_evaluated()
@@ -609,11 +609,6 @@ class CellStateManager:
         """Return (row, col) pairs for cells that have received events."""
         return list(self._cells.keys())
 
-    @property
-    def coverage(self) -> CoverageIndex | None:
-        """Access the underlying CoverageIndex (if available)."""
-        return self._coverage
-
     # ── Internal ─────────────────────────────────────────────────────────────
 
     def _cells_in_range(self, home: GridPosition) -> list[GridPosition]:
@@ -625,7 +620,7 @@ class CellStateManager:
         if self._coverage is None:
             return [home]
 
-        radius = int(self._coverage._decay_radius)
+        radius = int(self._coverage.decay_radius)
         if radius <= 0:
             return [home]
 
