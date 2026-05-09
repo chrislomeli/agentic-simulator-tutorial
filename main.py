@@ -26,16 +26,15 @@ Run from the project root::
 
 from __future__ import annotations
 
-import asyncio
+import datetime
 import logging
 
 from agents.commons.geo import cell_size_miles
+from agents.commons.schemas import GridPosition, Metric, TerrainContext, CoverageSummary, TimeWindow
 from agents.supervisor.graph import build_supervisor_graph
 from agents.supervisor.state import SupervisorGraph, SupervisorState
 from logging_config import configure_logging
-import datetime
 
-from agents.commons.schemas import GridPosition, Metric, CollatedRecord, TerrainContext, CoverageSummary, TimeWindow
 
 # configure_logging() must come before all project imports so that
 # module-level loggers are captured by structlog from the first record.
@@ -43,7 +42,7 @@ configure_logging(level=logging.INFO)
 
 
 from agents.commons.schemas import CollatedRecord, RiskAssessment  # noqa: E402
-from config import LLMLabel, build_llm_registry, get_settings, models  # noqa: E402
+from config import get_settings # noqa: E402
 from domains.wildfire.scenario_loader import load_scenario_from_package  # noqa: E402
 from domains.wildfire.world_builder.regions import get_region  # noqa: E402
 
@@ -96,15 +95,15 @@ def cluster_data():
                                end=datetime.datetime(2026, 5, 7, 23, 7, 14, 488680, tzinfo=datetime.timezone.utc),
                                sim_tick_start=0,
                                sim_tick_end=0), metrics=[
-                    Metric(type='temperature', value=24.9, signal_strength=0.2928932188134524,
+                    Metric(type='temperature', value=90.9, signal_strength=0.2928932188134524,
                            source_id='RAWS-CARRIZO-temp',
                            position=GridPosition(row=2, col=5),
                            timestamp=datetime.datetime(2026, 5, 7, 23, 7, 14, 488541, tzinfo=datetime.timezone.utc)),
-                    Metric(type='humidity', value=26.1, signal_strength=0.2928932188134524,
+                    Metric(type='humidity', value=0.1, signal_strength=0.2928932188134524,
                            source_id='RAWS-CARRIZO-humidity',
                            position=GridPosition(row=2, col=5),
                            timestamp=datetime.datetime(2026, 5, 7, 23, 7, 14, 488644, tzinfo=datetime.timezone.utc)),
-                    Metric(type='wind_speed', value=8.1, signal_strength=0.2928932188134524,
+                    Metric(type='wind_speed', value=40, signal_strength=0.2928932188134524,
                            source_id='RAWS-CARRIZO-wind',
                            position=GridPosition(row=2, col=5),
                            timestamp=datetime.datetime(2026, 5, 7, 23, 7, 14, 488680, tzinfo=datetime.timezone.utc)),

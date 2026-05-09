@@ -47,7 +47,7 @@ import logging
 import math
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, ClassVar
 
 from agents.commons.schemas import (
     CollatedRecord,
@@ -211,8 +211,13 @@ class EvaluationThresholds:
     # Time-based — max seconds between evals for cells that have data
     max_eval_interval_sec: float | None = 300.0  # 5 minutes
 
-    # Minimum distinct metric types required before any threshold fires
-    required_metrics = {"temperature", "wind_speed", "humidity"}
+    # Required metric types that must all be present on a cell before any
+    # threshold fires. ClassVar marks this as a fixed contract shared across
+    # instances (not a configurable per-instance field), and frozenset makes
+    # it immutable so accidental mutation can't bleed into other thresholds.
+    required_metrics: ClassVar[frozenset[str]] = frozenset(
+        {"temperature", "wind_speed", "humidity"}
+    )
 
     # Coverage change — trigger when a new type appears or disappears
     on_coverage_change: bool = False
@@ -569,7 +574,7 @@ class CellStateManager:
         seen: set[tuple[int, int]] = set()
         records_by_cluster: dict[str, list[CollatedRecord]] = {}
 
-        for (tr, tc) in center_positions:
+        for tr, tc in center_positions:
             for r in range(tr - 1, tr + 2):
                 for c in range(tc - 1, tc + 2):
                     if (r, c) in seen:
@@ -596,7 +601,7 @@ class CellStateManager:
         Called after snapshot_halo() so future evaluations compute deltas
         relative to the state the LLM actually saw.
         """
-        for (r, c) in positions:
+        for r, c in positions:
             snap = self._cells.get((r, c))
             if snap and snap.metrics:
                 snap.mark_evaluated()

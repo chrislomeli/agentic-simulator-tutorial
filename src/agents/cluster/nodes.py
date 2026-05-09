@@ -39,7 +39,6 @@ from agents.commons.state_types import StatusValue
 
 logger = logging.getLogger(__name__)
 
-
 # ── Milestone flag ────────────────────────────────────────────────────────────
 #
 # True for the dashboard milestone: evaluate returns stub CollatedRecordRisk
