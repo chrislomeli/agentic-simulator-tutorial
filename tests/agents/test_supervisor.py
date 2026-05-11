@@ -1,321 +1,376 @@
-"""Tests for ogar.agents.supervisor — state reducers, node functions, routing, graph."""
+"""Tests for agents.supervisor — state reducers, node functions, graph."""
 
+from datetime import datetime, timezone
+
+import pytest
+from langgraph.graph import END
 from langgraph.store.memory import InMemoryStore
 
-from langchain_core.messages import AIMessage
-
-from agents.supervisor.state import aggregate_findings_reducer
-from agents.supervisor.graph import (
-    fan_out_to_clusters,
-    run_cluster_agent,
+from agents.cluster.graph import build_cluster_agent_graph
+from agents.cluster.state import ClusterAgentState
+from agents.commons.agent_dependencies import AgentDependencies
+from agents.commons.schemas import (
+    CollatedRecord,
+    CollatedRecordRisk,
+    CoverageSummary,
+    GridPosition,
+    TerrainContext,
+    TimeWindow,
+)
+from agents.commons.state_types import StatusValue
+from agents.supervisor.graph import build_supervisor_graph
+from langgraph.graph.state import CompiledStateGraph
+from agents.supervisor.nodes import (
     assess_situation,
     decide_actions,
-    dispatch_commands,
+    fan_out_to_clusters,
+    make_dispatch_commands,
+    make_run_cluster_agent,
     route_after_decide,
-    _parse_assessment,
-    _parse_commands,
-    route_after_assess_llm,
-    route_after_decide_llm,
-    build_supervisor_graph,
 )
-from agents.cluster.state import AnomalyFinding
+from agents.supervisor.state import (
+    ActuatorCommand,
+    SupervisorGraph,
+    SupervisorState,
+    max_cluster_score,
+    merge_cluster_findings, RiskScore,
+)
 
 
-def _make_finding(finding_id: str = "f1", cluster_id: str = "c1") -> AnomalyFinding:
-    return {
-        "finding_id": finding_id,
-        "cluster_id": cluster_id,
-        "anomaly_type": "stub_placeholder",
-        "affected_sensors": ["s1"],
-        "confidence": 0.5,
-        "summary": "test finding",
-        "raw_context": {},
-    }
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
-def _make_supervisor_state(**overrides) -> dict:
-    base = {
-        "active_cluster_ids": ["cluster-north"],
-        "events_by_cluster": {},
-        "cluster_findings": [],
-        "messages": [],
-        "pending_commands": [],
-        "situation_summary": None,
-        "status": "idle",
-        "error_message": None,
-    }
-    base.update(overrides)
-    return base
+def _make_record(cluster_id: str = "cluster-north", row: int = 0, col: int = 0) -> CollatedRecord:
+    now = _now()
+    return CollatedRecord(
+        cluster_id=cluster_id,
+        position=GridPosition(row=row, col=col),
+        window=TimeWindow(start=now, end=now),
+        coverage=CoverageSummary(),
+        terrain=TerrainContext(
+            terrain_type="grassland",
+            vegetation=0.7,
+            fuel_moisture=0.2,
+            slope=5.0,
+        ),
+    )
 
 
-# ── Reducer tests ────────────────────────────────────────────────────────────
-
-class TestAggregateFindingsReducer:
-    def test_appends_new_findings(self):
-        existing = [_make_finding("f1")]
-        incoming = [_make_finding("f2")]
-        result = aggregate_findings_reducer(existing, incoming)
-        assert len(result) == 2
-
-    def test_deduplicates_by_id(self):
-        existing = [_make_finding("f1")]
-        incoming = [_make_finding("f1"), _make_finding("f2")]
-        result = aggregate_findings_reducer(existing, incoming)
-        assert len(result) == 2
-        ids = [f["finding_id"] for f in result]
-        assert ids == ["f1", "f2"]
-
-    def test_empty_lists(self):
-        assert aggregate_findings_reducer([], []) == []
+def _make_risk(row: int = 0, col: int = 0, score: int = 5) -> CollatedRecordRisk:
+    return CollatedRecordRisk(
+        position=GridPosition(row=row, col=col),
+        risk_score=score,
+        confidence=3.0,
+        confidence_rationale="test",
+        contributing_factors=["test factor"],
+    )
 
 
-# ── Node function tests ─────────────────────────────────────────────────────
+def _make_state(**overrides) -> SupervisorState:
+    base = SupervisorState()
+    return base.model_copy(update=overrides) if overrides else base
+
+
+# ── max_cluster_score reducer tests ──────────────────────────────────────────
+
+class TestMaxClusterScoreReducer:
+    def test_adds_new_cluster(self):
+        result = max_cluster_score({}, {"cluster-north": RiskScore(risk_score=7, confidence=4)})
+        assert result == {"cluster-north": RiskScore(risk_score=7, confidence=4)}
+
+    def test_keeps_higher_score(self):
+        result = max_cluster_score({"cluster-north": RiskScore(risk_score=5, confidence=4)}, {"cluster-north": RiskScore(risk_score=8, confidence=4)})
+        assert result["cluster-north"].risk_score == 8
+
+    def test_keeps_existing_if_higher(self):
+        result = max_cluster_score({"cluster-north": RiskScore(risk_score=9, confidence=4)}, {"cluster-north": RiskScore(risk_score=3, confidence=4)})
+        assert result["cluster-north"].risk_score == 9
+
+    def test_equal_scores_preserved(self):
+        result = max_cluster_score({"cluster-north": RiskScore(risk_score=5, confidence=4)}, {"cluster-north": RiskScore(risk_score=5, confidence=4)})
+        assert result["cluster-north"].risk_score == 5
+
+    def test_merges_disjoint_clusters(self):
+        result = max_cluster_score({"cluster-north": RiskScore(risk_score=5, confidence=4)}, {"cluster-south": RiskScore(risk_score=7, confidence=4)})
+        assert result == {"cluster-north": RiskScore(risk_score=5, confidence=4), "cluster-south": RiskScore(risk_score=7, confidence=4)}
+
+    def test_empty_incoming(self):
+        assert max_cluster_score({"cluster-north": RiskScore(risk_score=4, confidence=4)}, {}) == {"cluster-north": RiskScore(risk_score=4, confidence=4)}
+
+    def test_empty_existing(self):
+        assert max_cluster_score({}, {"cluster-north": RiskScore(risk_score=5, confidence=4)}) == {"cluster-north": RiskScore(risk_score=5, confidence=4)}
+
+    def test_both_empty(self):
+        assert max_cluster_score({}, {}) == {}
+
+
+# ── merge_cluster_findings reducer tests ─────────────────────────────────────
+
+class TestMergeClusterFindingsReducer:
+    def test_adds_new_cluster(self):
+        risk = _make_risk(score=5)
+        result = merge_cluster_findings({}, {"cluster-north": [risk]})
+        assert "cluster-north" in result
+        assert len(result["cluster-north"]) == 1
+
+    def test_overwrites_existing_cluster(self):
+        """Each cluster is fanned-out exactly once per tick — last write wins."""
+        old = _make_risk(score=3)
+        new = _make_risk(score=7)
+        result = merge_cluster_findings(
+            {"cluster-north": [old]}, {"cluster-north": [new]}
+        )
+        assert result["cluster-north"][0].risk_score == 7
+
+    def test_merges_disjoint_clusters(self):
+        result = merge_cluster_findings(
+            {"cluster-north": [_make_risk()]},
+            {"cluster-south": [_make_risk()]},
+        )
+        assert "cluster-north" in result
+        assert "cluster-south" in result
+
+    def test_empty_list_value_allowed(self):
+        result = merge_cluster_findings({}, {"cluster-north": []})
+        assert result["cluster-north"] == []
+
+
+# ── fan_out_to_clusters tests ─────────────────────────────────────────────────
 
 class TestFanOutToClusters:
-    def test_returns_send_objects(self):
-        state = _make_supervisor_state(
-            active_cluster_ids=["cluster-north", "cluster-south"]
-        )
+    def test_returns_one_send_per_cluster(self):
+        state = _make_state(clusters={
+            "cluster-north": [_make_record("cluster-north")],
+            "cluster-south": [_make_record("cluster-south")],
+        })
         sends = fan_out_to_clusters(state)
         assert len(sends) == 2
 
-    def test_empty_clusters(self):
-        state = _make_supervisor_state(active_cluster_ids=[])
+    def test_empty_clusters_returns_empty(self):
+        state = _make_state(clusters={})
         sends = fan_out_to_clusters(state)
-        assert len(sends) == 0
+        assert sends == []
+
+    def test_send_targets_run_cluster_agent(self):
+        state = _make_state(clusters={"cluster-north": [_make_record()]})
+        sends = fan_out_to_clusters(state)
+        assert sends[0].node == "run_cluster_agent"
+
+    def test_send_payload_is_cluster_agent_state_with_records(self):
+        records = [_make_record(row=0), _make_record(row=1)]
+        state = _make_state(clusters={"cluster-north": records})
+        sends = fan_out_to_clusters(state)
+        payload = sends[0].arg
+        assert isinstance(payload, ClusterAgentState)
+        assert payload.cluster_id == "cluster-north"
+        assert len(payload.collated_records) == 2
+
+
+# ── make_run_cluster_agent tests ──────────────────────────────────────────────
+
+class ResultScore:
+    pass
 
 
 class TestRunClusterAgent:
-    def test_returns_findings(self):
-        cluster_state = {
-            "cluster_id": "cluster-north",
-            "workflow_id": "test",
-            "sensor_events": [],
-            "trigger_event": None,
-            "messages": [],
-            "anomalies": [],
-            "status": "idle",
-            "error_message": None,
-        }
-        result = run_cluster_agent(cluster_state)
+    def test_returns_cluster_findings_and_score(self, agent_deps):
+        cluster_graph = build_cluster_agent_graph(agent_deps=agent_deps)
+        run_node = make_run_cluster_agent(cluster_graph)
+        state = ClusterAgentState(
+            cluster_id="cluster-north",
+            workflow_id="test",
+            collated_records=[_make_record()],
+        )
+        result = run_node(state)
         assert "cluster_findings" in result
-        assert len(result["cluster_findings"]) >= 1
+        assert "cluster_score" in result
+        assert "cluster-north" in result["cluster_findings"]
+        assert "cluster-north" in result["cluster_score"]
+        assert isinstance(result["cluster_score"]["cluster-north"], RiskScore)
 
+    def test_score_is_within_valid_range(self, agent_deps):
+        cluster_graph = build_cluster_agent_graph(agent_deps=agent_deps)
+        run_node = make_run_cluster_agent(cluster_graph)
+        state = ClusterAgentState(
+            cluster_id="cluster-north",
+            workflow_id="test",
+            collated_records=[_make_record()],
+        )
+        result = run_node(state)
+        score = result["cluster_score"]["cluster-north"].risk_score
+        assert 0 <= score <= 10
+
+    def test_empty_records_produces_score_zero(self, agent_deps):
+        """Guards against ValueError from max() on empty assessments."""
+        cluster_graph = build_cluster_agent_graph(agent_deps=agent_deps)
+        run_node = make_run_cluster_agent(cluster_graph)
+        state = ClusterAgentState(
+            cluster_id="cluster-north",
+            workflow_id="test",
+            collated_records=[],
+        )
+        result = run_node(state)
+        assert result["cluster_score"]["cluster-north"].risk_score == 0
+        assert result["cluster_findings"]["cluster-north"] == []
+
+
+# ── assess_situation tests ────────────────────────────────────────────────────
 
 class TestAssessSituation:
-    def test_produces_summary(self):
-        state = _make_supervisor_state(
-            cluster_findings=[_make_finding()],
-            active_cluster_ids=["cluster-north"],
+    def test_produces_situation_summary(self):
+        state = _make_state(
+            clusters={"cluster-north": []},
+            cluster_findings={"cluster-north": [_make_risk()]},
         )
         result = assess_situation(state)
         assert result["situation_summary"] is not None
-        assert "[STUB]" in result["situation_summary"]
-        assert result["status"] == "deciding"
+        assert len(result["situation_summary"]) > 0
 
-    def test_adds_message(self):
-        state = _make_supervisor_state(cluster_findings=[])
+    def test_summary_contains_stub_marker(self):
+        state = _make_state(clusters={"cluster-north": []})
         result = assess_situation(state)
-        assert len(result["messages"]) == 1
+        assert "[STUB]" in result["situation_summary"]
 
+    def test_status_is_processing(self):
+        state = _make_state()
+        result = assess_situation(state)
+        assert result["status"] == StatusValue.PROCESSING
+
+    def test_summary_reflects_cluster_count(self):
+        state = _make_state(
+            clusters={"cluster-north": [], "cluster-south": []},
+            cluster_findings={
+                "cluster-north": [_make_risk()],
+                "cluster-south": [_make_risk()],
+            },
+        )
+        result = assess_situation(state)
+        assert "2" in result["situation_summary"]
+
+
+# ── decide_actions tests ──────────────────────────────────────────────────────
 
 class TestDecideActions:
-    def test_stub_returns_no_commands(self):
-        state = _make_supervisor_state()
+    def test_returns_empty_command_list(self):
+        state = _make_state()
         result = decide_actions(state)
         assert result["pending_commands"] == []
-        assert result["status"] == "dispatching"
 
+    def test_status_is_processing(self):
+        state = _make_state()
+        result = decide_actions(state)
+        assert result["status"] == StatusValue.PROCESSING
+
+
+# ── make_dispatch_commands tests ──────────────────────────────────────────────
 
 class TestDispatchCommands:
-    def test_dispatch_empty(self):
-        state = _make_supervisor_state(pending_commands=[])
-        result = dispatch_commands(state)
-        assert result["status"] == "complete"
+    def test_sets_completed_status(self):
+        dispatch = make_dispatch_commands(store=None)
+        state = _make_state()
+        result = dispatch(state)
+        assert result["status"] == StatusValue.COMPLETED
 
-    def test_dispatch_with_commands(self):
-        state = _make_supervisor_state(
-            pending_commands=[{"cmd": "test"}],
-        )
-        result = dispatch_commands(state)
-        assert result["status"] == "complete"
+    def test_handles_empty_commands(self):
+        dispatch = make_dispatch_commands(store=None)
+        state = _make_state(pending_commands=[])
+        result = dispatch(state)
+        assert result["status"] == StatusValue.COMPLETED
 
+
+# ── route_after_decide tests ──────────────────────────────────────────────────
 
 class TestRouteAfterDecide:
-    def test_routes_to_dispatch(self):
-        state = _make_supervisor_state(status="dispatching")
+    def test_routes_to_dispatch_commands_when_processing(self):
+        state = _make_state(status=StatusValue.PROCESSING)
+        assert route_after_decide(state) == "dispatch_commands"
+
+    def test_routes_to_dispatch_commands_when_idle(self):
+        state = _make_state()  # default: IDLE
         assert route_after_decide(state) == "dispatch_commands"
 
     def test_routes_to_end_on_error(self):
-        state = _make_supervisor_state(status="error")
-        assert route_after_decide(state) == "__end__"
+        state = _make_state(status=StatusValue.ERROR)
+        assert route_after_decide(state) == END
+
+    def test_routes_to_end_on_completed(self):
+        state = _make_state(status=StatusValue.COMPLETED)
+        assert route_after_decide(state) == END
 
 
-# ── Graph build test ─────────────────────────────────────────────────────────
+# ── graph integration tests ───────────────────────────────────────────────────
 
 class TestSupervisorGraph:
-    def test_build_stub(self):
-        graph = build_supervisor_graph()
-        assert graph is not None
-        assert hasattr(graph, "invoke")
+    def test_build_returns_compiled_graph(self, agent_deps):
+        graph = build_supervisor_graph(agent_dependencies=agent_deps)
+        assert isinstance(graph, CompiledStateGraph)
+
+    def test_all_nodes_present(self, agent_deps):
+        graph = build_supervisor_graph(agent_dependencies=agent_deps)
         node_names = set(graph.get_graph().nodes.keys())
-        # fan_out_to_clusters is a conditional edge, not a node
-        assert "fan_out_to_clusters" not in node_names
         assert "run_cluster_agent" in node_names
         assert "assess_situation" in node_names
         assert "decide_actions" in node_names
         assert "dispatch_commands" in node_names
+        # fan_out_to_clusters is a conditional edge, not a node
+        assert "fan_out_to_clusters" not in node_names
 
-    def test_invoke_stub(self):
-        graph = build_supervisor_graph()
-        result = graph.invoke({
-            "active_cluster_ids": ["cluster-north", "cluster-south"],
-            "events_by_cluster": {},
-            "cluster_findings": [],
-            "messages": [],
-            "pending_commands": [],
-            "situation_summary": None,
-            "status": "idle",
+    def test_end_to_end_with_records_completes(self, agent_deps):
+        graph = build_supervisor_graph(agent_dependencies=agent_deps)
+        state = SupervisorState(clusters={
+            "cluster-north": [_make_record("cluster-north")],
         })
-        assert result["status"] == "complete"
+        result = graph.invoke(state)
+        assert result["status"] == StatusValue.COMPLETED
         assert result["situation_summary"] is not None
+        assert "cluster-north" in result["cluster_score"]
+        assert "cluster-north" in result["cluster_findings"]
 
-    def test_invoke_with_store_writes_situation(self):
-        store = InMemoryStore()
-        graph = build_supervisor_graph(store=store)
-        graph.invoke({
-            "active_cluster_ids": ["cluster-north"],
-            "events_by_cluster": {},
-            "cluster_findings": [_make_finding()],
-            "messages": [],
-            "pending_commands": [],
-            "situation_summary": None,
-            "status": "idle",
+    def test_end_to_end_multi_cluster(self, agent_deps):
+        graph = build_supervisor_graph(agent_dependencies=agent_deps)
+        state = SupervisorState(clusters={
+            "cluster-north": [_make_record("cluster-north", row=0)],
+            "cluster-south": [_make_record("cluster-south", row=5)],
         })
-        items = store.search(("situations", "global"))
+        result = graph.invoke(state)
+        assert result["status"] == StatusValue.COMPLETED
+        assert len(result["cluster_score"]) == 2
+        assert len(result["cluster_findings"]) == 2
+
+    def test_end_to_end_empty_clusters_does_not_raise(self, agent_deps):
+        """Empty clusters: fan_out returns [] so no cluster agents run.
+        LangGraph terminates early without visiting any nodes. No error raised."""
+        graph = build_supervisor_graph(agent_dependencies=agent_deps)
+        state = SupervisorState(clusters={})
+        result = graph.invoke(state)
+        assert result["status"] != StatusValue.ERROR
+        assert result["cluster_score"] == {}
+
+    def test_cluster_scores_are_ints_in_valid_range(self, agent_deps):
+        graph = build_supervisor_graph(agent_dependencies=agent_deps)
+        state = SupervisorState(clusters={
+            "cluster-north": [_make_record("cluster-north", row=r) for r in range(3)],
+        })
+        result = graph.invoke(state)
+        for cluster, score in result["cluster_score"].items():
+            assert isinstance(score, RiskScore)
+            assert 0 <= score.risk_score <= 10
+
+    def test_invoke_with_store_persists_assessments(self, agent_deps):
+        store = InMemoryStore()
+        deps = AgentDependencies(
+            llm_registry=agent_deps.llm_registry,
+            prompt_registry=agent_deps.prompt_registry,
+            store=store,
+            heat_map=agent_deps.heat_map,
+        )
+        graph = build_supervisor_graph(agent_dependencies=deps)
+        state = SupervisorState(clusters={
+            "cluster-north": [_make_record("cluster-north", row=2, col=3)],
+        })
+        graph.invoke(state)
+        items = store.search(("risk_assessments", "cluster-north"))
         assert len(items) == 1
-        assert "situation_summary" in items[0].value
-
-    def test_invoke_with_store_reads_past_incidents(self):
-        store = InMemoryStore()
-        store.put(("incidents", "cluster-north"), "past-f1", {
-            "finding_id": "past-f1",
-            "cluster_id": "cluster-north",
-            "anomaly_type": "threshold_breach",
-            "confidence": 0.9,
-            "summary": "Previous fire detected",
-        })
-        graph = build_supervisor_graph(store=store)
-        result = graph.invoke({
-            "active_cluster_ids": ["cluster-north"],
-            "events_by_cluster": {},
-            "cluster_findings": [],
-            "messages": [],
-            "pending_commands": [],
-            "situation_summary": None,
-            "status": "idle",
-        })
-        assert "past incident" in result["situation_summary"]
-        assert "0 past incident" not in result["situation_summary"]
-
-
-class TestLLMRouters:
-    def test_route_after_assess_no_tool_calls(self):
-        state = _make_supervisor_state(
-            messages=[AIMessage(content="some assessment")]
-        )
-        assert route_after_assess_llm(state) == "parse_assessment"
-
-    def test_route_after_assess_with_tool_calls(self):
-        msg = AIMessage(content="", tool_calls=[{"name": "get_all_findings", "args": {}, "id": "1"}])
-        state = _make_supervisor_state(messages=[msg])
-        assert route_after_assess_llm(state) == "assess_tool_node"
-
-    def test_route_after_assess_error(self):
-        state = _make_supervisor_state(status="error")
-        assert route_after_assess_llm(state) == "__end__"
-
-    def test_route_after_decide_no_tool_calls(self):
-        state = _make_supervisor_state(
-            messages=[AIMessage(content="some decision")]
-        )
-        assert route_after_decide_llm(state) == "parse_commands"
-
-    def test_route_after_decide_with_tool_calls(self):
-        msg = AIMessage(content="", tool_calls=[{"name": "get_finding_summary", "args": {}, "id": "2"}])
-        state = _make_supervisor_state(messages=[msg])
-        assert route_after_decide_llm(state) == "decide_tool_node"
-
-
-class TestParseAssessment:
-    def test_valid_json(self):
-        content = '{"severity": "high", "situation_summary": "Fire detected"}'
-        state = _make_supervisor_state(
-            messages=[AIMessage(content=content)]
-        )
-        result = _parse_assessment(state)
-        assert result["situation_summary"] == "Fire detected"
-        assert result["status"] == "deciding"
-
-    def test_invalid_json_uses_raw_content(self):
-        state = _make_supervisor_state(
-            messages=[AIMessage(content="Not JSON at all")]
-        )
-        result = _parse_assessment(state)
-        assert "Not JSON at all" in result["situation_summary"]
-
-    def test_no_messages(self):
-        state = _make_supervisor_state(messages=[])
-        result = _parse_assessment(state)
-        assert result["situation_summary"] == "[No assessment produced]"
-
-    def test_markdown_fenced_json(self):
-        content = '```json\n{"severity": "low", "situation_summary": "All clear"}\n```'
-        state = _make_supervisor_state(
-            messages=[AIMessage(content=content)]
-        )
-        result = _parse_assessment(state)
-        assert result["situation_summary"] == "All clear"
-
-
-class TestParseCommands:
-    def test_valid_commands(self):
-        content = '{"commands": [{"command_type": "alert", "cluster_id": "c1", "priority": 3, "payload": {"message": "fire"}}], "reasoning": "test"}'
-        state = _make_supervisor_state(
-            messages=[AIMessage(content=content)]
-        )
-        result = _parse_commands(state)
-        assert len(result["pending_commands"]) == 1
-        cmd = result["pending_commands"][0]
-        assert cmd.command_type == "alert"
-        assert cmd.cluster_id == "c1"
-
-    def test_high_priority_command(self):
-        content = '{"commands": [{"command_type": "escalate", "cluster_id": "c1", "priority": 5, "payload": {}}], "reasoning": "urgent"}'
-        state = _make_supervisor_state(
-            messages=[AIMessage(content=content)]
-        )
-        result = _parse_commands(state)
-        assert len(result["pending_commands"]) == 1
-        assert result["pending_commands"][0].priority == 5
-
-    def test_no_commands(self):
-        content = '{"commands": [], "reasoning": "all clear"}'
-        state = _make_supervisor_state(
-            messages=[AIMessage(content=content)]
-        )
-        result = _parse_commands(state)
-        assert result["pending_commands"] == []
-
-    def test_invalid_json(self):
-        state = _make_supervisor_state(
-            messages=[AIMessage(content="not json")]
-        )
-        result = _parse_commands(state)
-        assert result["pending_commands"] == []
-        assert result["status"] == "dispatching"
-
-    def test_empty_messages(self):
-        state = _make_supervisor_state(messages=[])
-        result = _parse_commands(state)
-        assert result["pending_commands"] == []

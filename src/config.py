@@ -1,7 +1,7 @@
 """
-ogar.config
+world-simiulator.config
 
-Centralised settings for the OGAR testbed.
+Centralised settings for the world-simiulator testbed.
 
 Loading order (pydantic-settings resolves in this priority, highest first):
   1. Actual environment variables  (e.g. injected by K8s)
@@ -10,99 +10,72 @@ Loading order (pydantic-settings resolves in this priority, highest first):
 
 Usage
 ─────
-  from ogar.config import get_settings
+  from config import Settings, build_llm_registry, LLM_ROLE_CONFIG, models
 
-  settings = get_settings()
-  key = settings.anthropic_api_key
-
-  # Apply LangSmith env vars so LangGraph picks them up automatically:
+  settings = Settings()
   settings.apply_langsmith()
+
+  registry = build_llm_registry(settings, models, LLM_ROLE_CONFIG)
+  llm = registry.get("classifier")
+  result = llm.invoke(messages)
+
+Settings is constructed once at the composition root and threaded down
+into anything that needs it. There is deliberately no module-level
+cached singleton — it makes tests harder (cache_clear footguns), breaks
+in multi-process deployments, and hides the dependency from callers.
 
 Deployment modes
 ────────────────
   Local dev  — set AI_ENV_FILE=/path/to/.env  (or export vars directly)
   K8s        — leave AI_ENV_FILE unset; inject vars via ConfigMap / Secret
-               No .env file is read; pydantic-settings falls back to env vars only.
 """
 
 from __future__ import annotations
 
-import dataclasses
+import logging
 import os
-from functools import lru_cache
-from typing import Optional
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from enum import Enum
+logger = logging.getLogger(__name__)
 
-class LLMProvider(Enum):
-    STUB = "STUB"
-    ANTHROPIC = "ANTHROPIC"
-    OPENAI = "OPENAI"
 
-class LLMLabel(Enum):
-    HAIKU = "haiku"
-    SONNET = "sonnet"
-    GPT_MINI = "gpt-mini"
-    GPT_NANO = "gpt-nano"
-    GPT = "gpt"
-    STUB = "STUB"
+# ── Provider / label enums ────────────────────────────────────────────────────
 
-@dataclasses.dataclass
-class LLMModel:
-    model: str
-    key_label: str
-    provider: LLMProvider
-    api_key: Optional[str] = None
+
+# ── Settings ──────────────────────────────────────────────────────────────────
 
 
 class Settings(BaseSettings):
+    # ── Database ───────────────────────────────────────────────────────────────
+    postgres_url: str = "postgresql://localhost:5432/wildfire"
+
     # ── LLM credentials ───────────────────────────────────────────────────────
-    llm_source: LLMProvider = LLMProvider.STUB
-    llm_model: Optional[LLMModel] = None
-    anthropic_api_key: str = ""
-    openai_api_key: str = ""
+    anthropic_api_key: SecretStr | None = None
+    openai_api_key: SecretStr | None = None
+    ollama_base_url: str = "http://localhost:11434"
+
+    # ── World raw ────────────────────────────────────────────────────────────
     world_data: str = "src/domains/wildfire/scenario_data/north_south_fire.json"
 
-    @property
-    def selected_model(self) -> Optional[LLMModel]:
-        if self.llm_model is None:
-            return None
-        connection = dataclasses.replace(self.llm_model)
-        connection.api_key = getattr(self, connection.key_label, "") or None
-        return connection
-
     # ── LangSmith / LangChain tracing ─────────────────────────────────────────
-    # pydantic-settings reads LANGCHAIN_API_KEY, LANGCHAIN_TRACING_V2, etc.
-    # from env vars (or the .env file) automatically — field names map 1-to-1.
     langchain_api_key: str = ""
     langchain_tracing_v2: bool = False
-    langchain_project: str = "ogar"
+    langchain_project: str = "world-simulator"
     langchain_endpoint: str = "https://api.smith.langchain.com"
 
     model_config = SettingsConfigDict(
-        # AI_ENV_FILE=/path/to/.env for local dev.
-        # Unset (None) on K8s — pydantic-settings skips file loading entirely
-        # and reads from environment variables only.
-        env_file=os.getenv("AI_ENV_FILE"),
+        # env_file is intentionally NOT set at class-definition time —
+        # the composition root passes ``_env_file=os.getenv("AI_ENV_FILE")``
+        # at construction so the lookup happens per-instance. Tests can
+        # construct Settings() without any .env interference.
         env_file_encoding="utf-8",
-        # Silently ignore keys in the .env file that are not defined above.
-        # Useful because the shared .env may contain keys for other projects.
         extra="ignore",
     )
 
     def apply_langsmith(self) -> None:
-        """
-        Write LangSmith settings into os.environ so LangGraph picks them up.
-
-        LangGraph reads LANGCHAIN_* env vars at import time in some cases,
-        so call this as early as possible — before importing langgraph or
-        langchain modules — if you want tracing enabled.
-
-        Only sets vars that have non-empty values to avoid overwriting
-        vars already present in the environment.
-        """
+        """Write LangSmith settings into os.environ so LangGraph picks them up."""
         pairs = {
             "LANGCHAIN_API_KEY": self.langchain_api_key,
             "LANGCHAIN_TRACING_V2": "true" if self.langchain_tracing_v2 else "",
@@ -114,15 +87,12 @@ class Settings(BaseSettings):
                 os.environ[key] = value
 
 
-@lru_cache
 def get_settings() -> Settings:
+    """Build a ``Settings`` instance, honouring ``AI_ENV_FILE``.
+
+    If the ``AI_ENV_FILE`` environment variable is set, its value is
+    passed as ``_env_file`` so pydantic-settings reads that file.
+    Otherwise a plain ``Settings()`` is returned (env vars only).
     """
-    Return the cached Settings singleton.
-
-    The cache means the .env file is read once per process.
-    In tests, call get_settings.cache_clear() before patching env vars
-    so a fresh Settings object is created.
-    """
-    return Settings()
-
-
+    env_file = os.getenv("AI_ENV_FILE")
+    return Settings(_env_file=env_file) if env_file else Settings()

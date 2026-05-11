@@ -1,79 +1,78 @@
 """
-ogar.agents.supervisor.graph
+world-simulator.agents.supervisor.graph
 
-Supervisor LangGraph — stub mode.
+Supervisor LangGraph — stub mode (dashboard milestone).
 
-Topology:
-  START
-    → fan_out_to_clusters     (conditional edge — returns List[Send])
-      → run_cluster_agent     (parallel, one per cluster)
-    → assess_situation
-    → decide_actions
-    → dispatch_commands → END
+Topology
+────────
+    START
+      → fan_out_to_clusters     (conditional edge — returns list[Send])
+        → run_cluster_agent     (parallel, one per cluster)
+      → assess_situation
+      → decide_actions
+      → dispatch_commands → END
 
 The Send API pattern
 ────────────────────
-fan_out_to_clusters returns a list of Send() objects. LangGraph runs
-all of them in parallel, merges their results into the supervisor
-state via the aggregate_findings reducer, then advances to
-assess_situation.  This implicit synchronization barrier is the key
-LangGraph skill these two graphs together demonstrate.
+``fan_out_to_clusters`` returns a list of ``Send()`` objects. LangGraph
+runs all of them in parallel, merges their results into the supervisor
+state via the ``max_cluster_score`` and ``merge_cluster_findings`` reducers,
+then advances to ``assess_situation``. This implicit synchronization barrier
+is the key LangGraph skill these two graphs together demonstrate.
 
 Why a separate supervisor graph?
 ─────────────────────────────────
-The supervisor is the orchestrator (one instance per batch).
+The supervisor is the per-batch orchestrator (one invocation per tick).
 The cluster agent is a worker subgraph (one invocation per cluster).
-Splitting them keeps cluster state isolated for parallel execution
-and lets the cluster subgraph be tested on its own.
+Splitting them keeps cluster state isolated for parallel execution and
+lets the cluster subgraph be tested on its own.
 
-Usage:
-  graph = build_supervisor_graph()
-  result = graph.invoke(SupervisorState(
-      active_cluster_ids=["cluster-north"],
-      events_by_cluster={"cluster-north": [event]},
-  ))
+Construction
+────────────
+``build_supervisor_graph`` is the only public entry point. It builds
+the cluster subgraph internally, threading the registry and store down
+into it, so callers configure dependencies once at the composition root
+and the supervisor handles wiring its child graph.
 """
 
 import logging
-from typing import Optional
 
 from langgraph.graph import END, START, StateGraph
-from langgraph.store.base import BaseStore
 
+from agents.cluster.graph import build_cluster_agent_graph
+from agents.commons.agent_dependencies import AgentDependencies
 from agents.supervisor.nodes import (
     assess_situation,
     decide_actions,
     fan_out_to_clusters,
     make_dispatch_commands,
+    make_run_cluster_agent,
     route_after_decide,
-    run_cluster_agent,
 )
-from agents.supervisor.state import SupervisorState
+from agents.supervisor.state import SupervisorGraph, SupervisorState
 
 logger = logging.getLogger(__name__)
 
 
-# ── Graph builder ─────────────────────────────────────────────────────────────
-
-def build_supervisor_graph(store: Optional[BaseStore] = None):
-    """
-    Compile and return the supervisor graph (stub mode).
+def build_supervisor_graph(*, agent_dependencies: AgentDependencies) -> SupervisorGraph:
+    """Compile and return the supervisor graph.
 
     Parameters
     ──────────
-    store : Optional LangGraph Store. Reserved for future use — when
-            wired up, dispatch_commands will write the situation summary
-            to ("situations", "global") so future runs can read it.
-            Stub mode ignores it.
+    agent_deps : AgentDependencies
+        DI container with prompt_registry, llm_registry, and optional store.
+        The cluster subgraph (built internally) receives these dependencies
+        to render prompts, call LLMs, and persist findings.
     """
-    builder = StateGraph(SupervisorState)
+    cluster_graph = build_cluster_agent_graph(agent_deps=agent_dependencies)
 
-    builder.add_node("run_cluster_agent", run_cluster_agent)
+    builder = StateGraph(SupervisorState)
+    builder.add_node("run_cluster_agent", make_run_cluster_agent(cluster_graph))
     builder.add_node("assess_situation", assess_situation)
     builder.add_node("decide_actions", decide_actions)
-    builder.add_node("dispatch_commands", make_dispatch_commands(store=store))
+    builder.add_node("dispatch_commands", make_dispatch_commands(store=agent_dependencies.store))
 
-    # fan_out_to_clusters returns List[Send] — must be a conditional edge,
+    # fan_out_to_clusters returns list[Send] — must be a conditional edge,
     # NOT a regular node. LangGraph interprets the Sends as parallel
     # dispatches to "run_cluster_agent".
     builder.add_conditional_edges(START, fan_out_to_clusters, ["run_cluster_agent"])
@@ -85,11 +84,4 @@ def build_supervisor_graph(store: Optional[BaseStore] = None):
     builder.add_conditional_edges("decide_actions", route_after_decide)
     builder.add_edge("dispatch_commands", END)
 
-    compiled = builder.compile()
-    return compiled
-
-
-# Module-level compiled graph (stub mode).
-# Import this from a runner or main.py:
-#   from agents.supervisor.graph import supervisor_graph
-supervisor_graph = build_supervisor_graph()
+    return SupervisorGraph(builder.compile())

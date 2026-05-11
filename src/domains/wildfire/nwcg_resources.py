@@ -1,10 +1,10 @@
 """
-ogar.domains.wildfire.nwcg_resources
+world-simiulator.domains.wildfire.nwcg_resources
 
 NWCG (National Wildfire Coordinating Group) standard resource catalog and
 fireline intensity thresholds for resource typing.
 
-This formalises the raw data from docs/tutorial/wildfires/resources.py into
+This formalises the raw raw from docs/tutorial/wildfires/resources.py into
 typed dataclasses that the resource-sizing tools can query programmatically.
 
 NWCG resource typing uses integer type numbers where 1 = heaviest/most capable
@@ -19,6 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 # ── Resource specification ────────────────────────────────────────────────────
+
 
 @dataclass(frozen=True)
 class NWCGResourceSpec:
@@ -37,9 +38,10 @@ class NWCGResourceSpec:
     pump_gpm                   : Pump rate (gallons/minute) — engines and tenders
     capacity_gal               : Drop/bucket capacity (gallons) — aircraft
     """
+
     nwcg_id: str
     kind: str
-    nwcg_type: int | str          # int for operational resources, str for cache items
+    nwcg_type: int | str  # int for operational resources, str for cache items
     name: str
     category: str
     production_rate_chains_hr: float | None = None
@@ -85,7 +87,6 @@ NWCG_CATALOG: list[NWCGResourceSpec] = [
         category="Personnel",
         production_rate_chains_hr=5.0,
     ),
-
     # ── Engines ───────────────────────────────────────────────────────────────
     NWCGResourceSpec(
         nwcg_id="E-1",
@@ -114,7 +115,6 @@ NWCG_CATALOG: list[NWCGResourceSpec] = [
         tank_gal=150.0,
         pump_gpm=50.0,
     ),
-
     # ── Dozers ────────────────────────────────────────────────────────────────
     NWCGResourceSpec(
         nwcg_id="D-1",
@@ -132,7 +132,6 @@ NWCG_CATALOG: list[NWCGResourceSpec] = [
         category="Equipment",
         production_rate_chains_hr=30.0,
     ),
-
     # ── Water Tenders ─────────────────────────────────────────────────────────
     NWCGResourceSpec(
         nwcg_id="WT-1",
@@ -152,7 +151,6 @@ NWCG_CATALOG: list[NWCGResourceSpec] = [
         tank_gal=4000.0,
         pump_gpm=200.0,
     ),
-
     # ── Air Tankers ───────────────────────────────────────────────────────────
     NWCGResourceSpec(
         nwcg_id="A-1",
@@ -170,7 +168,6 @@ NWCG_CATALOG: list[NWCGResourceSpec] = [
         category="Aircraft",
         capacity_gal=9400.0,
     ),
-
     # ── Helicopters ───────────────────────────────────────────────────────────
     NWCGResourceSpec(
         nwcg_id="H-1",
@@ -188,7 +185,6 @@ NWCG_CATALOG: list[NWCGResourceSpec] = [
         category="Aircraft",
         capacity_gal=100.0,
     ),
-
     # ── Cache items ───────────────────────────────────────────────────────────
     NWCGResourceSpec(
         nwcg_id="NFES-0670",
@@ -242,14 +238,15 @@ NWCG_CATALOG: list[NWCGResourceSpec] = [
 #   ≥  2000 BTU/ft/s  → indirect attack only; direct suppression marginal
 
 INTENSITY_THRESHOLDS: dict[str, float] = {
-    "hand_crew": 100.0,   # BTU/ft/s — hand crews effective below this
-    "engine":    500.0,   # BTU/ft/s — engines effective below this
-    "dozer":    1000.0,   # BTU/ft/s — dozers effective below this
-    "air_tanker": 2000.0, # BTU/ft/s — aerial marginal above this
+    "hand_crew": 100.0,  # BTU/ft/s — hand crews effective below this
+    "engine": 500.0,  # BTU/ft/s — engines effective below this
+    "dozer": 1000.0,  # BTU/ft/s — dozers effective below this
+    "air_tanker": 2000.0,  # BTU/ft/s — aerial marginal above this
 }
 
 
 # ── Catalog helpers ───────────────────────────────────────────────────────────
+
 
 def get_by_id(nwcg_id: str) -> NWCGResourceSpec | None:
     """Look up a resource spec by NWCG ID (e.g. "C-1")."""

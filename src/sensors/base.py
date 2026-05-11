@@ -1,5 +1,5 @@
 """
-ogar.sensors.base
+world-simiulator.sensors.base
 
 Abstract base class for all sensors.
 
@@ -12,7 +12,7 @@ SensorBase owns:
   - Reporting a health / confidence score via health().
 
 The subclass owns:
-  - read() — returns a plain dict with domain-specific data.
+  - read() — returns a plain dict with domain-specific raw.
     This is the ONLY method a new sensor type must implement.
 
 Example: adding a new sensor type
@@ -59,6 +59,7 @@ logger = logging.getLogger(__name__)
 
 # ── Failure mode enum ─────────────────────────────────────────────────────────
 
+
 class FailureMode(StrEnum):
     """
     The set of failure modes a sensor can be put into.
@@ -66,14 +67,16 @@ class FailureMode(StrEnum):
     Using str as the mixin means FailureMode.STUCK == "STUCK" is True,
     which makes logging and JSON serialisation simpler.
     """
-    NORMAL  = "NORMAL"   # Sensor is healthy — read() runs as implemented
-    STUCK   = "STUCK"    # Sensor returns same value every call
+
+    NORMAL = "NORMAL"  # Sensor is healthy — read() runs as implemented
+    STUCK = "STUCK"  # Sensor returns same value every call
     DROPOUT = "DROPOUT"  # Sensor goes silent — emit() returns None
-    DRIFT   = "DRIFT"    # Gradual offset accumulates in numeric readings
-    SPIKE   = "SPIKE"    # Occasional large outlier injected
+    DRIFT = "DRIFT"  # Gradual offset accumulates in numeric readings
+    SPIKE = "SPIKE"  # Occasional large outlier injected
 
 
 # ── Abstract base class ───────────────────────────────────────────────────────
+
 
 class SensorBase(ABC):
     """
@@ -216,10 +219,10 @@ class SensorBase(ABC):
         (e.g. based on how far a reading is from expected range).
         """
         return {
-            FailureMode.NORMAL:  1.0,
-            FailureMode.DRIFT:   0.7,
-            FailureMode.STUCK:   0.3,
-            FailureMode.SPIKE:   0.5,
+            FailureMode.NORMAL: 1.0,
+            FailureMode.DRIFT: 0.7,
+            FailureMode.STUCK: 0.3,
+            FailureMode.SPIKE: 0.5,
             FailureMode.DROPOUT: 0.0,
         }[self._failure_mode]
 

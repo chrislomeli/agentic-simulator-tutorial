@@ -1,5 +1,5 @@
 """
-ogar.world.generic_engine
+world-simiulator.world.generic_engine
 
 GenericWorldEngine — the domain-agnostic simulation tick loop.
 
@@ -42,19 +42,18 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic
 
-from world.cell_state import CellState
+from world.cell_state import C
 from world.environment import EnvironmentState
 from world.generic_grid import GenericTerrainGrid
 from world.physics import PhysicsModule, StateEvent
 
 logger = logging.getLogger(__name__)
 
-C = TypeVar("C", bound=CellState)
-
 
 # ── Ground truth snapshot ────────────────────────────────────────────────────
+
 
 @dataclass
 class GenericGroundTruthSnapshot:
@@ -70,10 +69,11 @@ class GenericGroundTruthSnapshot:
     state_events    : what changed this tick (serialised StateEvents)
     domain_summary  : domain-specific summary from physics.summarize()
     grid_summary    : cell counts by summary_label (e.g. {"BURNING": 5})
-    resource_summary: optional resource readiness data, populated by the
+    resource_summary: optional resource readiness raw, populated by the
                       scenario script or orchestrator (not by the engine).
                       Empty dict when no ResourceInventory is used.
     """
+
     tick: int
     environment: dict[str, Any]
     state_events: list[dict[str, Any]]
@@ -83,6 +83,7 @@ class GenericGroundTruthSnapshot:
 
 
 # ── Generic world engine ─────────────────────────────────────────────────────
+
 
 class GenericWorldEngine(Generic[C]):
     """
@@ -94,9 +95,9 @@ class GenericWorldEngine(Generic[C]):
 
     Usage
     ─────
-      from ogar.domains.wildfire.cell_state import FireCellState
-      from ogar.domains.wildfire.environment import FireEnvironmentState
-      from ogar.domains.wildfire.physics import FirePhysicsModule
+      from world-simiulator.domains.wildfire.cell_state import FireCellState
+      from world-simiulator.domains.wildfire.environment import FireEnvironmentState
+      from world-simiulator.domains.wildfire.physics import FirePhysicsModule
 
       physics = FirePhysicsModule()
       environment = FireEnvironmentState(temperature_c=35, ...)
@@ -236,5 +237,9 @@ class GenericWorldEngine(Generic[C]):
         self.grid.update_cell_state(row, col, state, layer)
         logger.info(
             "Injected state at (%d,%d,%d): %s tick=%d",
-            row, col, layer, state.summary_label(), self._tick,
+            row,
+            col,
+            layer,
+            state.summary_label(),
+            self._tick,
         )

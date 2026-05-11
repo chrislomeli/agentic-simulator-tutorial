@@ -1,5 +1,5 @@
 """
-ogar.sensors.publisher
+world-simiulator.sensors.publisher
 
 Async sensor publisher loop.
 
@@ -33,8 +33,8 @@ wall-clock time (1.0s) for realistic demos.
 Usage
 ─────
   queue = SensorEventQueue()
-  publisher = SensorPublisher(sensors=[temp_sensor, smoke_sensor], queue=queue)
-  await publisher.run()        # runs forever until cancelled
+  publisher = SensorPublisher(inventory=inventory, queue=queue)
+  await publisher.run()          # runs forever until cancelled
   # or:
   await publisher.run(ticks=50)  # runs for exactly 50 ticks then stops
 """
@@ -46,7 +46,6 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-from sensors.base import SensorBase
 from transport.queue import SensorEventQueue
 
 if TYPE_CHECKING:
@@ -75,8 +74,7 @@ class SensorPublisher:
     def __init__(
         self,
         *,
-        sensors: list[SensorBase] | None = None,
-        inventory: SensorInventory | None = None,
+        inventory: SensorInventory,
         queue: SensorEventQueue,
         tick_interval_seconds: float = 1.0,
         engine: GenericWorldEngine | None = None,
@@ -85,13 +83,10 @@ class SensorPublisher:
         """
         Parameters
         ──────────
-        sensors               : List of sensors to tick each interval.
-                                All must be SensorBase subclasses.
-                                Ignored when inventory is provided.
-        inventory             : Optional SensorInventory.  When provided,
-                                the publisher iterates inventory.all_sensors()
-                                each tick — this is live, so thinning or adding
-                                sensors between ticks takes effect immediately.
+        inventory             : SensorInventory of registered sensors. The
+                                publisher reads from this live each tick, so
+                                thinning or adding sensors between ticks
+                                takes effect immediately.
         queue                 : The event queue to put events onto.
                                 The bridge consumer reads from the other end.
         tick_interval_seconds : How long to wait between tick cycles.
@@ -107,9 +102,6 @@ class SensorPublisher:
                                 passed to sensor.emit().  This is how sensors
                                 receive world state without holding an engine reference.
         """
-        if inventory is None and sensors is None:
-            raise ValueError("Provide either sensors or inventory")
-        self._sensors = sensors
         self._inventory = inventory
         self._queue = queue
         self._tick_interval = tick_interval_seconds
@@ -133,15 +125,23 @@ class SensorPublisher:
         logger.info("SensorPublisher stop requested")
         self._stop_requested = True
 
-    async def run(self, ticks: int | None = None) -> None:
+    async def run(
+        self,
+        ticks: int | None = None,
+        location_count: int | None = 2,
+    ) -> None:
         """
         Run the publisher loop.
 
         Parameters
         ──────────
-        ticks : If provided, stop after this many tick cycles.
-                If None, run forever until stop() is called or the
-                task is cancelled.
+        ticks          : If provided, stop after this many tick cycles.
+                         If None, run forever until stop() is called or
+                         the task is cancelled.
+        location_count : Number of sensor *locations* to sample per tick.
+                         Default 2 throttles LLM cost in the demo.
+                         Pass None to tick every registered sensor each
+                         cycle — useful for deterministic unit tests.
 
         This coroutine is meant to be run as an asyncio Task:
           task = asyncio.create_task(publisher.run())
@@ -151,13 +151,9 @@ class SensorPublisher:
         self._stop_requested = False
         self.ticks_completed = 0
 
-        sensor_count = (
-            self._inventory.size if self._inventory is not None
-            else len(self._sensors)
-        )
         logger.info(
             "SensorPublisher starting — %d sensor(s), %.2fs interval, limit=%s",
-            sensor_count,
+            self._inventory.size,
             self._tick_interval,
             ticks if ticks is not None else "∞",
         )
@@ -165,7 +161,9 @@ class SensorPublisher:
         while True:
             # ── Check stop conditions ───────────────────────────────────
             if self._stop_requested:
-                logger.info("SensorPublisher stopped by request after %d ticks", self.ticks_completed)
+                logger.info(
+                    "SensorPublisher stopped by request after %d ticks", self.ticks_completed
+                )
                 break
 
             if ticks is not None and self.ticks_completed >= ticks:
@@ -183,8 +181,8 @@ class SensorPublisher:
             # ── Tick all sensors ────────────────────────────────────────
             active_sensors = (
                 self._inventory.all_sensors()
-                if self._inventory is not None
-                else self._sensors
+                if location_count is None
+                else self._inventory.random_sensors(location_count)
             )
             for sensor in active_sensors:
                 # Sample local conditions if a sampler and engine are available
@@ -192,7 +190,9 @@ class SensorPublisher:
                 if self._sampler is not None and self._engine is not None:
                     if sensor.grid_row is not None and sensor.grid_col is not None:
                         local_conditions = self._sampler(
-                            self._engine, sensor.grid_row, sensor.grid_col,
+                            self._engine,
+                            sensor.grid_row,
+                            sensor.grid_col,
                         )
 
                 event = sensor.emit(local_conditions)

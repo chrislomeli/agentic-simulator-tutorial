@@ -1,662 +1,341 @@
-# Session 2: The Cluster Agent (Stub Mode)
+# Session 2: The Full Graph Skeleton
 
 ---
 
-## What you're doing and why
+## What you're building and why
 
-This is the first session where you write agent code. You're building your first LangGraph graph.
+In this session you build the **complete application skeleton** — both graphs, all state schemas, and the entry point — as stub implementations that compile, run, and produce dummy output.
 
-The graph is called the **cluster agent**. Its job is simple: take in a batch of sensor readings from one geographic cluster and produce **findings** — structured conclusions about what the agent determined is happening in that part of the world. A finding might say: "fire risk is high near grid position (2,3), rate of spread would be fast given current wind conditions." Or in sensor fault terms: "temperature sensor temp-A1 appears to be stuck — reading hasn't changed in 10 ticks."
+No LLM. No real analysis. Just structure.
 
-Findings are what flows upward to the supervisor in later sessions. The cluster agent doesn't know about resources, other clusters, or what to do about what it found. It only answers: *"what is happening in my cluster right now?"*
-
-<!-- TODO: insert diagram — sensor events pulled from queue into cluster agent, agent returning AnomalyFinding objects -->
-
-In this session the classification logic is a stub (hardcoded). Session 3 replaces it with an LLM. Starting in stub mode separates two learning curves:
-- **This session:** LangGraph primitives — state schemas, nodes, edges, reducers
-- **Session 3:** LLM integration — tool binding, ReAct loops, prompt engineering
-
-When something breaks in stub mode you know exactly which layer failed. Once the graph structure works, swapping the stub for an LLM is just changing one function.
-
----
-## Changes
-git commit
-```bash
- 3 files changed, 423 insertions(+)
- create mode 100644 main.py
- create mode 100644 src/agents/cluster/graph.py
- create mode 100644 src/agents/cluster/state.py
+By the end you will have a working end-to-end pipeline:
 
 ```
-validate
-```bash
-> python main.py 
-
-=== Cluster agent demo ===
-2026-04-30 17:44:05,635 [INFO] agents.cluster.cluster_graph: ClusterAgent subgraph compiled (stub mode)
-2026-04-30 17:44:05,639 [INFO] agents.cluster.cluster_graph: ClusterAgent[cluster-north]:       NODE: ingest_events: ingesting event from source=temp-n1
-2026-04-30 17:44:05,639 [INFO] agents.cluster.cluster_graph: ClusterAgent[cluster-north]:       NODE classify: STUB (no LLM)
-2026-04-30 17:44:05,639 [INFO] agents.cluster.cluster_graph: ClusterAgent[cluster-north]        ROUTER: route_after_classify 
-2026-04-30 17:44:05,639 [INFO] agents.cluster.cluster_graph: ClusterAgent[cluster-north]        NODE: report_findings:  reporting 1 finding(s) to supervisor
+python main.py
+```
+```
+=== Supervisor demo (full graph) ===
 Status:   completed
+Summary:  [STUB] Received 1 finding(s) from 2 cluster(s).
 Findings: 1
-  - stub_placeholder (confidence=0.5)
+  - [cluster-north] stub_placeholder (confidence=0.5)
     [STUB] classify node not yet implemented for cluster cluster-north
+Commands: 0
 ```
+
+The reason to do this before writing any real logic: **you need to understand the shape of the whole thing before you can reason about any one part of it.** The supervisor's fan-out pattern, the state boundary between the two graphs, the synchronization barrier — these are structural decisions that affect every session that follows. Getting them wrong early is expensive. Understanding them now is not.
 
 ---
 
-## Setup
+## The full picture
 
-If you're starting from a fresh clone:
+Here is the complete data flow. Read this carefully — the rest of the session explains each piece.
+
+```
+main.py
+  │
+  └─▶  supervisor_graph.invoke(SupervisorState)
+         │
+         │  fan_out_to_clusters()          ← conditional edge off START
+         │  returns List[Send]             ← one Send per active cluster
+         │
+         ├─▶  run_cluster_agent(ClusterAgentState)   ← parallel
+         │      └─▶  cluster_agent_graph.invoke()    ← Python call
+         │             ├─▶ ingest_events
+         │             ├─▶ classify          (stub)
+         │             └─▶ report_findings
+         │             returns anomalies ──────────────────────┐
+         │                                                     │
+         ├─▶  run_cluster_agent(ClusterAgentState)   ← parallel│
+         │      └─▶  cluster_agent_graph.invoke()             │
+         │             ...                                     │
+         │             returns anomalies ──────────────────────┤
+         │                                                     │
+         │  [synchronization barrier]                          │
+         │  aggregate_findings reducer merges all ◀────────────┘
+         │
+         ├─▶  assess_situation     (stub)
+         ├─▶  decide_actions       (stub)
+         └─▶  dispatch_commands    (stub)
+                │
+                └─▶  END
+```
+
+Two things to notice immediately:
+
+1. **There are two separate LangGraph graphs.** The cluster agent is compiled independently. The supervisor calls it from a regular Python node — not via LangGraph's subgraph nesting mechanism.
+
+2. **The cluster agents run in parallel.** The supervisor fans out to N clusters simultaneously and waits for all of them before continuing. This is the `Send` API.
+
+---
+
+## Why two separate graphs, and why called from Python?
+
+LangGraph supports true subgraph nesting: you can `add_node("cluster", cluster_subgraph)` and LangGraph manages the invocation. We deliberately do not use that here.
+
+The reason: **the Send API fan-out requires each parallel invocation to carry its own state payload.** When `fan_out_to_clusters` returns `List[Send]`, each `Send` object carries a complete `ClusterAgentState` built from the supervisor's `events_by_cluster` dict. LangGraph runs all of those in parallel, each with isolated state.
+
+If the cluster agent were a native subgraph node, its state would be whatever field of `SupervisorState` you mapped to it — shared across all parallel runs. With the Python invocation pattern, each `run_cluster_agent` call gets its own `ClusterAgentState` from the `Send`, invokes the compiled cluster graph with it, and returns only the findings it cares about back to the supervisor.
+
+The state types are different at the boundary by design:
+- `fan_out_to_clusters` reads `SupervisorState`, builds `ClusterAgentState` per cluster
+- `run_cluster_agent` receives `ClusterAgentState` (from `Send`), returns `{"cluster_findings": anomalies}` into `SupervisorState`
+
+That explicit boundary is what lets the cluster agent be tested in complete isolation — no supervisor needed.
+
+---
+
+## Files you'll create
+
+| File | Purpose |
+|------|---------|
+| `src/agents/cluster/state.py` | `ClusterAgentState` — data flowing through the cluster graph |
+| `src/agents/cluster/nodes.py` | Cluster node functions: `ingest_events`, `classify`, `report_findings` |
+| `src/agents/cluster/graph.py` | Cluster graph builder + module-level compiled instance |
+| `src/agents/supervisor/state.py` | `SupervisorState` — data flowing through the supervisor graph |
+| `src/agents/supervisor/nodes.py` | Supervisor node functions: `fan_out_to_clusters`, `run_cluster_agent`, `assess_situation`, `decide_actions`, `dispatch_commands` |
+| `src/agents/supervisor/graph.py` | Supervisor graph builder + module-level compiled instance |
+| `main.py` | Entry point — builds and invokes the supervisor graph |
+
+You also need empty `__init__.py` files in `src/agents/`, `src/agents/cluster/`, and `src/agents/supervisor/` to make them importable.
+
+---
+
+## Get the code
+
+Copy the skeleton from the tutorial repo:
 
 ```bash
-uv venv
+git fetch tutorial
+git checkout tutorial/tutorial-02 -- src/agents/ main.py
+```
+
+Then run it to confirm the baseline works:
+
+```bash
+python main.py
+```
+
+You should see the output shown at the top of this session. If you see `ImportError`, make sure your virtual environment is active and the project is installed:
+
+```bash
 source .venv/bin/activate
 uv pip install -e ".[llm]" --group dev
-git remote add tutorial https://github.com/chrislomeli/agentic-world-simulator.git
-git fetch tutorial
 ```
 
 ---
 
-## Rubric coverage
+## Concept boxes
 
-This session covers the following skills from the [LangGraph Skills Rubric](../rubric.md):
+> Read these before the walkthrough. They are short.
 
-| Skill | Level | Where in this session |
-|-------|-------|-----------------------|
-| StateGraph + Pydantic state | foundational | `ClusterAgentState` in `state.py` |
-| Nodes — functions vs runnables | foundational | `ingest_events`, `classify`, `report_findings` in `cluster_graph.py` |
-| Edges — normal vs conditional | foundational | `add_edge` and `add_conditional_edges` in `build_cluster_agent_graph` |
-| Reducers and Annotated state | mid-level | `append_events` reducer, `add_messages` reducer in `state.py` |
-| Compile + invoke | foundational | `builder.compile()` and `graph.invoke()` |
-| Subgraphs — compile and invoke | mid-level | Cluster agent is compiled as a standalone subgraph, invoked by the supervisor in Session 5 |
+### StateGraph and Pydantic state
 
----
+A `StateGraph` is a directed graph where a state object flows from node to node. You define the state schema, add nodes and edges, then `compile()` it into a runnable.
 
-## What you're building
-
-Two files:
-
-| File | What it contains |
-|------|-----------------|
-| `src/agents/cluster/state.py` | The state schema — the data structure that flows through the graph |
-| `src/agents/cluster/cluster_graph.py` | The graph — nodes, edges, and the builder function |
-
-When you're done, this test should pass:
-
-```bash
-pytest tests/agents/test_cluster.py -v
-```
-
----
-
-## Concept Box: LangGraph fundamentals
-
-> **Read this before the code.** This is your first LangGraph session. These four concepts are all you need to understand to write the code below.
-
-### 1. StateGraph — the container
-
-A `StateGraph` is a directed graph where **state** flows from node to node. You create one with a state schema (a Pydantic `BaseModel` or TypedDict), add nodes and edges, then `compile()` it into a runnable graph.
+We use Pydantic `BaseModel` for state rather than `TypedDict`. Both work identically with LangGraph. The trade-off: Pydantic gives field validation, defaults, and serialization out of the box. Nodes read fields as attributes (`state.cluster_id`) rather than dict keys.
 
 ```python
-from langgraph.graph import StateGraph, START, END
-
 builder = StateGraph(MyState)
-builder.add_node("step_a", my_function_a)
-builder.add_node("step_b", my_function_b)
+builder.add_node("step_a", fn_a)
+builder.add_node("step_b", fn_b)
 builder.add_edge(START, "step_a")
 builder.add_edge("step_a", "step_b")
 builder.add_edge("step_b", END)
 graph = builder.compile()
-
-result = graph.invoke(MyState(field_1="value", field_2=[]))
+result = graph.invoke(MyState(cluster_id="x", workflow_id="y"))
 ```
 
-### 2. Pydantic state — the data contract
+Every node receives the full current state and returns a **partial dict** of only the fields it changed. LangGraph merges the partial update back into the state.
 
-The state schema defines **what fields exist** and **what types they have**. Every node receives the full state and returns a partial dict of only the fields it changed.
+### Reducers
 
-LangGraph examples typically use `TypedDict` for state. We use Pydantic `BaseModel` instead — it gives us field validation, defaults via `Field(default_factory=...)`, and clean serialization. Both work identically with `StateGraph`, reducers, and `Annotated` fields. The trade-off: nodes read state with **attribute access** (`state.cluster_id`) rather than dict access (`state.get("cluster_id")`).
-
-```python
-from pydantic import BaseModel, Field
-
-class MyState(BaseModel):
-    name: str
-    items: List[str] = Field(default_factory=list)
-    status: str = Field(default="idle")
-
-# A node that only changes status:
-def my_node(state: MyState) -> dict:
-    return {"status": "done"}  # Only return what changed
-```
-
-### 3. Reducers — how fields merge
-
-By default, returning `{"items": ["new"]}` **overwrites** the `items` field. If you want to **append** instead, you annotate the field with a reducer:
+By default, returning `{"items": ["new"]}` **overwrites** the `items` field. If you want to **append** instead, annotate the field with a reducer function:
 
 ```python
 from typing import Annotated
 from operator import add
 
 class MyState(BaseModel):
-    items: Annotated[List[str], add] = Field(default_factory=list)  # add = list concatenation
+    items: Annotated[List[str], add] = Field(default_factory=list)
 ```
 
-Now `return {"items": ["new"]}` **appends** `"new"` to the existing list. LangGraph calls `add(existing_items, ["new"])` behind the scenes.
+Now returning `{"items": ["new"]}` calls `add(existing, ["new"])` and appends. LangGraph handles the merge.
 
-You can write custom reducers for more complex merge logic (deduplication, capped windows, etc.).
+This project uses two custom reducers:
+- `append_events` on `ClusterAgentState.sensor_events` — accumulates events in a capped rolling window
+- `aggregate_findings` on `SupervisorState.cluster_findings` — merges findings from parallel cluster agents, deduplicating by `finding_id`
 
-### 4. Edges — wiring nodes together
+### Edges and conditional edges
 
-- **Normal edge:** `add_edge("a", "b")` — always go from a to b
-- **Conditional edge:** `add_conditional_edges("a", router_fn)` — the router function reads state and returns the name of the next node
-- `START` — the entry point of the graph
-- `END` — the exit point of the graph
+- `add_edge("a", "b")` — always go from a to b
+- `add_conditional_edges("a", router_fn)` — call `router_fn(state)`, go to the node it returns
+- `add_conditional_edges(START, fan_out_fn, ["target"])` — **special form**: `fan_out_fn` returns `List[Send]` instead of a node name. LangGraph runs all Send targets in parallel.
 
-### What can go wrong
+The last form is how `fan_out_to_clusters` works. It is **not** a regular node — it is a conditional edge function attached to START. This distinction matters: it has no entry in `add_node`, and it receives `SupervisorState` but returns routing instructions, not a state update.
 
-| Symptom | Cause | Fix |
-|---------|-------|-----|
-| Validation error at invoke time | Initial state is missing a required field | Pass all required fields when constructing the state |
-| Node return value ignored | Returned a field not declared in the state model | Only return fields that are declared in the state schema |
-| List field gets overwritten instead of appended | No reducer annotation | Add `Annotated[List[...], my_reducer]` to the field |
-| Graph runs forever | Conditional edge never routes to END | Ensure every path eventually reaches END |
+### The Send API
 
----
-
-## File 1: `src/agents/cluster/state.py`
-
-This file defines the data that flows through the cluster agent graph. Every node reads from it and writes partial updates back to it.
-
-Create `src/agents/cluster/state.py`:
+`Send("node_name", state_payload)` tells LangGraph: run `node_name` with `state_payload` as its input state. Return a list of these from a conditional edge and LangGraph runs all of them in parallel, then merges their state updates via reducers before continuing.
 
 ```python
-"""
-ogar.agents.cluster.state
+from langgraph.types import Send
 
-State schema for the cluster agent LangGraph subgraph.
-
-What is a cluster agent?
-────────────────────────
-One cluster agent runs per geographic/logical cluster of sensors.
-Its job is to:
-  1. Accumulate sensor events from its cluster (rolling window).
-  2. Run a LangGraph tool loop to classify anomalies.
-  3. Report findings (structured anomaly records) upward to the supervisor.
-
-The cluster agent is a LangGraph subgraph — it has its own state schema
-that is separate from the supervisor's state.  The supervisor maps
-its own state in/out when it invokes the cluster agent subgraph.
-
-State design principles
-────────────────────────
-  - Only fields that at least one node reads OR writes belong here.
-  - Fields the LLM tool loop needs (messages) use LangGraph's add_messages
-    reducer so new messages are appended rather than overwriting the list.
-  - sensor_events uses a custom reducer (append-only) for the same reason:
-    we want to accumulate events across invocations, not replace them.
-  - Fields are Optional where they may not be set yet at graph start.
-
-Node responsibilities (skeleton — logic comes later)
-──────────────────────────────────────────────────────
-  ingest_events    : Receives incoming SensorEvent, adds to sensor_events.
-                     Sets status to "processing".
-  classify         : LLM tool loop node.  Reads sensor_events and messages.
-                     Uses tools to query history, cross-reference readings.
-                     Writes anomalies when detected.
-  report_findings  : Packages anomalies into Finding objects for the supervisor.
-                     Sets status to "complete".
-"""
-
-from __future__ import annotations
-
-import uuid
-from enum import StrEnum
-from typing import Annotated
-from typing import Any, Dict, List, Literal, Optional
-
-from langchain_core.messages import BaseMessage
-from langgraph.graph.message import add_messages
-from pydantic import BaseModel, Field
-
-from transport.schemas import SensorEvent
-
-
-
-
-# ── Custom reducer for sensor event accumulation ──────────────────────────────
-
-def append_events(
-        existing: List[SensorEvent],
-        new: List[SensorEvent],
-) -> List[SensorEvent]:
-    """
-    Reducer that appends new sensor events to the existing list.
-
-    LangGraph calls the reducer when a node returns a partial state update.
-    Without a reducer, the default behaviour is to OVERWRITE the field.
-    With this reducer, returning {"sensor_events": [new_event]} APPENDS
-    to the existing list rather than replacing it.
-
-    We also cap the window at MAX_EVENT_WINDOW to prevent unbounded growth.
-    The oldest events are dropped first.
-    """
-    MAX_EVENT_WINDOW = 50  # Keep the last 50 events per cluster agent
-    combined = existing + new
-    return combined[-MAX_EVENT_WINDOW:]  # Trim from the front (oldest first)
-
-
-
-# ── Finding model ─────────────────────────────────────────────────────────────
-
-class AnomalyFinding(BaseModel):
-    """
-    A structured anomaly record produced by the cluster agent.
-
-    The cluster agent writes these; the supervisor reads them.
-
-    finding_id      : UUID string.
-    cluster_id      : Which cluster detected this.
-    anomaly_type    : e.g. "sensor_fault", "threshold_breach", "correlated_event"
-    affected_sensors: List of source_ids involved.
-    confidence      : Agent's confidence this is a real event (not noise).
-    summary         : Human-readable description for the supervisor's context.
-    raw_context     : Relevant sensor readings that led to this finding.
-                      Passed to the supervisor for cross-cluster correlation.
-    """
-    finding_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    cluster_id: str
-    anomaly_type: str
-    affected_sensors: List[str] = Field(default_factory=list)
-    confidence: float
-    summary: str
-    raw_context: Dict[str, Any]
-
-
-
-# ── State values  ───────────────────────────────────────────────────────
-class StatusValue(StrEnum):
-    IDLE = "idle"
-    PROCESSING = "processing"
-    COMPLETED = "completed"
-    ERROR = "error"
-
-
-# ── Cluster agent state ───────────────────────────────────────────────────────
-
-class ClusterAgentState(BaseModel):
-    """
-    The internal working state for a single cluster agent execution.
-
-    This state lives inside the LangGraph subgraph.
-    It is NOT shared directly with the supervisor — the supervisor
-    invokes the subgraph and receives only the output mapping.
-    """
-
-    # ── Identity ──────────────────────────────────────────────────────
-    cluster_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    # Which workflow execution this state belongs to.
-    # Matches the workflow_id in WorkflowRunner.
-    workflow_id: str
-
-    # ── Incoming sensor data ──────────────────────────────────────────
-    # Annotated with append_events reducer so new events accumulate.
-    # ingest_events node writes here; classify node reads here.
-    sensor_events: Annotated[List[SensorEvent], append_events] = Field(default_factory=list)
-
-    # The single most-recent event that triggered this invocation.
-    # Separate from sensor_events so classify can easily find the trigger.
-    trigger_event: Optional[SensorEvent]
-
-    # ── LLM tool loop ─────────────────────────────────────────────────
-    # add_messages reducer appends new messages rather than overwriting.
-    # classify node reads and writes here via the ToolNode loop.
-    messages: Annotated[List[BaseMessage], add_messages] = Field(default_factory=list)
-
-    # ── Findings output ───────────────────────────────────────────────
-    # Populated by classify when anomalies are detected.
-    # Read by report_findings to package for the supervisor.
-    anomalies: List[AnomalyFinding] = Field(default_factory=list)
-
-    # ── Control ───────────────────────────────────────────────────────
-    # idle       : Waiting for a new trigger event
-    # processing : Currently running the classify loop
-    # complete   : Finished this invocation, findings are ready
-    # error      : Something went wrong — details in error_message
-    status: StatusValue = Field(default=StatusValue.IDLE)
-
-    error_message: Optional[str]
+def fan_out_to_clusters(state: SupervisorState) -> List[Send]:
+    return [
+        Send("run_cluster_agent", ClusterAgentState(cluster_id=cid, ...))
+        for cid in state.active_cluster_ids
+    ]
 ```
 
-**What to understand here:**
-
-- `ClusterAgentState` is a Pydantic `BaseModel`. LangGraph uses it to validate node return values. Unlike TypedDict, Pydantic gives us field defaults (`Field(default_factory=list)`) and validation out of the box.
-- `sensor_events` uses `Annotated[..., append_events]` — this tells LangGraph to call `append_events(existing, new)` when merging updates instead of overwriting. Same pattern for `messages` with LangChain's built-in `add_messages` reducer.
-- `StatusValue` is a `StrEnum` — same string values as a `Literal[...]` would give you, but with named members (`StatusValue.PROCESSING`) you can reference from nodes and tests without typo risk.
-- The `messages` field is declared now even though the stub doesn't use it. Session 3 swaps in the LLM, and keeping the schema stable means *only* the `classify` node has to change.
-- Every node receives the full state and returns only the fields it changed. LangGraph merges the partial update into the current state.
+After all `run_cluster_agent` invocations finish, LangGraph applies all their returned `{"cluster_findings": [...]}` updates via `aggregate_findings` and advances to `assess_situation`. That automatic wait-for-all is the **synchronization barrier**.
 
 ---
 
-## File 2: `src/agents/cluster/cluster_graph.py`
+## Walkthrough: the cluster agent
 
-This file defines the graph — three nodes connected by edges, plus a builder function.
+### `src/agents/cluster/state.py`
 
-In stub mode the topology is a straight line: `START → ingest_events → classify → report_findings → END`. The `route_after_classify` conditional edge is wired in even though stub mode only routes one way — it's there so the error path works and so Session 3 can swap the `classify` node without rewiring the graph.
+`ClusterAgentState` is the data contract for one cluster agent execution. The key fields:
 
-Create `src/agents/cluster/cluster_graph.py`:
+| Field | Type | Reducer | Purpose |
+|-------|------|---------|---------|
+| `cluster_id` | `str` | — | Which cluster this agent is working on |
+| `workflow_id` | `str` | — | Links back to the supervisor run |
+| `trigger_event` | `Optional[SensorEvent]` | — | The event that caused this invocation |
+| `sensor_events` | `List[SensorEvent]` | `append_events` | Rolling window of recent events |
+| `messages` | `List[BaseMessage]` | `add_messages` | LLM conversation (unused in stub mode, wired now for Session 3) |
+| `anomalies` | `List[AnomalyFinding]` | — | Findings produced by classify |
+| `status` | `StatusValue` | — | `idle → processing → completed` (or `error`) |
 
-```python
-"""
-ogar.agents.cluster.graph
+`AnomalyFinding` is also defined here — it is the output type the supervisor cares about. Defining it in the cluster state module means the supervisor can import it without a circular dependency.
 
-Cluster agent LangGraph subgraph — stub mode.
+`StatusValue` is a `StrEnum`. Nodes write it (`StatusValue.PROCESSING`), routers read it. In stub mode the lifecycle is linear: `idle → processing → completed`. Later sessions add an `error` exit path and an LLM tool loop that cycles through `processing` multiple times.
 
-Topology:
-  START → ingest_events → classify → route_after_classify
-        → report_findings → END
-
-Usage:
-  graph = build_cluster_agent_graph()
-
-Why a subgraph?
-───────────────
-The cluster agent is compiled as a standalone subgraph.
-The supervisor invokes it as a node (via Send API fan-out).
-Each invocation gets its own state, which is why it can run in
-parallel for multiple clusters without state collision.
-
-Compiling separately also means it can be tested in isolation —
-you can invoke the cluster agent directly with a SensorEvent
-without needing the supervisor running.
-"""
-
-import logging
-from typing import Literal, Optional
-from uuid import uuid4
-
-from langgraph.graph import END, START, StateGraph
-from langgraph.store.base import BaseStore
-
-from agents.cluster.state import AnomalyFinding, ClusterAgentState, StatusValue
-
-logger = logging.getLogger(__name__)
-
-
-# ── Node functions ────────────────────────────────────────────────────────────
-# Each node receives the full ClusterAgentState state and returns a PARTIAL state update.
-# LangGraph merges the partial update into the current state using reducers.
-# Nodes should only return the fields they actually changed.
-
-def ingest_events(state: ClusterAgentState) -> dict:
-    """
-    First node — acknowledges the trigger event and sets status to processing.
-    It takes a ClusterAgentState in, and adds the status to the state - all of the actual processing will happen in the classify node (next)
-
-    In a real implementation this node might also:
-      - Validate the incoming event schema
-      - Load recent history from the LangGraph Store
-      - Decide whether the event is worth classifying (pre-filter)
-
-    For now, we just log and set the status to "processing"
-    """
-    trigger = state.trigger_event
-    logger.info(
-        "ClusterAgent[%s] ingesting event from source=%s",
-        state.cluster_id,
-        trigger.source_id if trigger else "unknown",
-    )
-
-    # Return only the fields we're changing.
-    # LangGraph merges this with the existing state.
-    return {
-        "status": StatusValue.PROCESSING,
-        "error_message": None,   # Clear any previous error
-    }
-
-
-def classify(state: ClusterAgentState) -> dict:
-    """
-    Stub classify node — used when no LLM is provided.
-
-    Produces a placeholder finding so the rest of the pipeline
-    has something to work with end-to-end.
-    """
-    cluster_id = state.cluster_id
-    trigger = state.trigger_event
-
-    logger.info(
-        "ClusterAgent[%s] classify — STUB (no LLM)",
-        cluster_id,
-    )
-
-    stub_finding: AnomalyFinding = AnomalyFinding(
-        finding_id= str(uuid4()),
-        cluster_id= cluster_id,
-        anomaly_type= "stub_placeholder",
-        affected_sensors= [trigger.source_id] if trigger else [],
-        confidence= 0.5,
-        summary= f"[STUB] classify node not yet implemented for cluster {cluster_id}",
-        raw_context={
-            "trigger_event_id": trigger.event_id if trigger else None,
-            "event_count_in_window": len(state.sensor_events),
-        },
-    )
-
-    return {
-        "anomalies": [stub_finding],
-        "status": StatusValue.COMPLETED,
-    }
-
-
-def report_findings(state: ClusterAgentState, store: Optional[BaseStore] = None) -> dict:
-    """
-    Final node — logs findings and writes each AnomalyFinding to the
-    LangGraph Store so the supervisor can recall past incidents.
-
-    Store write (when store is provided):
-      namespace : ("incidents", cluster_id)
-      key       : finding_id  (UUID — stable across restarts)
-      value     : the full AnomalyFinding dict
-
-    store is injected by LangGraph at compile time via
-    builder.compile(store=store) — any node whose signature includes
-    `store: Optional[BaseStore]` receives it automatically.
-    """
-    anomalies = state.anomalies or []
-    cluster_id = state.cluster_id
-
-    logger.info(
-        "ClusterAgent[%s] reporting %d finding(s) to supervisor",
-        cluster_id,
-        len(anomalies),
-    )
-
-    if store is not None and anomalies:
-        for finding in anomalies:
-            store.put(
-                ("incidents", cluster_id),
-                finding.finding_id,
-                finding.model_dump(),
-            )
-        logger.info(
-            "ClusterAgent[%s] wrote %d finding(s) to store",
-            cluster_id,
-            len(anomalies),
-        )
-
-    # No state change needed — anomalies are already in state
-    return {}
-
-
-# ── Routers ──────────────────────────────────────────────────────────────────
-
-def route_after_classify(
-    state: ClusterAgentState,
-) -> Literal["report_findings", "__end__"]:
-    """
-    Router for stub mode — classify always goes to report_findings.
-    """
-    if state.status == StatusValue.ERROR:
-        logger.warning(
-            "ClusterAgent[%s] exiting due to error: %s",
-            state.cluster_id,
-            state.error_message,
-        )
-        return "__end__"
-
-    return "report_findings"
-
-
-# ── Graph builder ─────────────────────────────────────────────────────────────
-
-def build_cluster_agent_graph(store: Optional[BaseStore] = None):
-    """
-    Compile and return the cluster agent subgraph (stub mode).
-
-    Returns a compiled LangGraph graph ready for .invoke() or .stream().
-
-    To test the cluster agent in isolation:
-      graph = build_cluster_agent_graph()           # no store
-      graph = build_cluster_agent_graph(store=s)    # with InMemoryStore
-      result = graph.invoke({
-          "cluster_id": "cluster-north",
-          "workflow_id": "test-run-1",
-          "trigger_event": some_sensor_event,
-      })
-    """
-
-    builder = StateGraph(ClusterAgentState)
-    builder.add_node("ingest_events", ingest_events)
-    builder.add_node("classify", classify)
-    builder.add_node("report_findings", report_findings)
-
-    # ── Stub mode: deterministic classify ──────────────────────────
-    builder.add_edge(START, "ingest_events")
-    builder.add_edge("ingest_events", "classify")
-    builder.add_conditional_edges("classify", route_after_classify)
-
-    builder.add_edge("report_findings", END)
-
-    # Passing store=store makes LangGraph inject it into any node whose
-    # signature includes `store: Optional[BaseStore]`.
-    # store=None is safe — nodes receive None and guard against it.
-    logger.info("ClusterAgent subgraph compiled (stub mode)")
-    compiled = builder.compile(store=store)
-    return compiled
-
-
-# Module-level compiled graph (stub mode).
-# The graph is compiled once when the module is first imported.
-cluster_agent_graph = build_cluster_agent_graph()
-```
-
-**What to understand here:**
-
-- The three nodes correspond exactly to the three responsibilities in the `state.py` docstring: `ingest_events` (bookkeeping), `classify` (the brain — stubbed for now), `report_findings` (output + store write).
-- Each node returns only the fields it changes. LangGraph merges those partial updates into the full state using the reducers from `state.py`.
-- `route_after_classify` is a conditional edge. In stub mode it always routes to `report_findings` unless `status == ERROR`. The error branch is real — Session 3's LLM mode can fail mid-loop and uses the same exit path.
-- `build_cluster_agent_graph(store=...)` accepts an optional `BaseStore`. The store is **not** in the state schema; LangGraph injects it into any node whose signature includes `store: Optional[BaseStore]` (only `report_findings` here).
-- The module-level `cluster_agent_graph = build_cluster_agent_graph()` is compiled at import time. The supervisor and the tests both import this same compiled instance.
-
----
-
-## Checkpoint
-
-Run the test:
-
-```bash
-pytest tests/agents/test_cluster.py -v
-```
-
-You should see green for the reducer tests, the node tests, the router tests, and the graph integration tests. The `test_invoke_with_store_writes_findings` test is the end-to-end check: build the graph with an `InMemoryStore`, invoke it with a trigger event, then read `("incidents", "cluster-north")` back out and confirm the stub finding landed.
-
----
-
-*Next: Session 3 replaces the stub `classify` node with an LLM-powered ReAct loop. The LLM calls tools to inspect sensor data, reasons about anomalies, and produces findings based on actual analysis. The graph topology adds a cycle — the ReAct loop — but the state schema and the other two nodes stay exactly the same.*
-
----
-
-<!--
-## TALKING POINTS — not yet written into prose
-
-Things we need to communicate to the reader in this session. Rough notes, not wordsmithed.
-
-### On state
-
-- `ClusterAgentState` is a Pydantic `BaseModel`. LangGraph uses it to validate node outputs
-  and to know what fields exist. We use Pydantic over TypedDict for field defaults, validation,
-  and serialisation. Both work identically with StateGraph.
-- The *reducer* concept is the key thing to nail. Without a reducer, every node return
-  *replaces* the field. With `append_events`, returning `{"sensor_events": [new_event]}`
-  *appends*. Same for `add_messages`. This is how state accumulates across nodes and
-  across invocations.
-- `status` is a `StrEnum` — the graph uses it as a lightweight FSM. Nodes write it,
-  routers read it. In stub mode: IDLE → PROCESSING → COMPLETED. In LLM mode: add a
-  possible loop through tool calls, plus an ERROR exit.
-- The store is NOT in the state model. It's injected by LangGraph at compile time
-  via `builder.compile(store=store)`. Any node with `store: Optional[BaseStore] = None`
-  in its signature gets it automatically. If you see it in `report_findings` but not in
-  `state.py`, that's why.
-
-### On nodes
+### `src/agents/cluster/nodes.py`
 
 Three nodes, three responsibilities:
-1. `ingest_events` — bookkeeping. Sets status, clears errors. Nothing interesting yet.
-   In a real system: pre-filtering, history loading, schema validation.
-2. `classify` (stub here, LLM in Session 3) — the brain. This is the only node
-   that differs between modes. Stub returns a hardcoded placeholder.
-3. `report_findings` — output packaging + store write. Takes `anomalies` from state
-   and writes them to the LangGraph Store so the supervisor can recall past incidents.
 
-### On graph topology
+**`ingest_events`** — bookkeeping. Logs the incoming trigger event, sets status to `PROCESSING`. In a real implementation this is where you'd pre-filter events or load history from the store. For now it just marks the state as in-flight.
 
-- In stub mode: linear. START → ingest → classify → report → END.
-  The conditional edge still exists (`route_after_classify`) but only routes to one place.
-  It's there so the error path works and so Session 3 can swap the node without changing
-  the wiring.
-- In LLM mode (Session 3): adds a cycle. classify → [tool_node → classify]*N → parse_findings.
-  The cycle is the ReAct loop. LangGraph supports this — graphs are not required to be DAGs.
+**`classify`** — the brain. In stub mode it produces a hardcoded `AnomalyFinding` with `anomaly_type="stub_placeholder"`. Session 3 replaces this node with an LLM ReAct loop. Nothing else in the graph changes.
 
-### On stub vs. LLM mode
+**`make_report_findings(store=None)`** — returns a closure. The outer function captures the `store` at graph-build time; the inner function is the actual node. This pattern lets us inject a `BaseStore` without putting it in the state schema. When `store` is provided, the node writes each finding to `("incidents", cluster_id)` in the store so the supervisor can recall past incidents.
 
-- Why ship stub mode at all? Two reasons. First: separates the "did I wire the graph
-  correctly" question from the "did I prompt the LLM correctly" question. Second:
-  the stub stays available for tests and offline development (no API key needed).
-- The stub produces a real `AnomalyFinding` (just with `anomaly_type: "stub_placeholder"`),
-  so everything downstream — supervisor, store reads, evaluation — works without
-  knowing the difference.
+### `src/agents/cluster/graph.py`
 
-### On where node logic lives (for readers who ask)
+The graph topology:
 
-- All node functions are in `graph.py`. In production you'd probably split into
-  `nodes.py` and `graph.py` (topology only). For a tutorial, colocation is
-  intentional — you can read the whole graph without jumping files.
+```
+START → ingest_events → classify → route_after_classify
+                                        │
+                              ┌─────────┴──────────┐
+                         report_findings          END
+                              │                (on error)
+                             END
+```
 
-### On what the cluster agent does NOT do
+`route_after_classify` is a conditional edge. In stub mode it always routes to `report_findings` unless `status == ERROR`. The error branch is real — it's there for Session 3's LLM mode which can fail mid-loop.
 
-- It does NOT query resources. That's the supervisor's job (Sessions 6–7).
-- It does NOT know about other clusters. Each cluster agent only sees its own events.
-- It does NOT decide what to do. It only answers: "what is happening in my cluster?"
-- The output (`AnomalyFinding`) is a *description*, not an action. The supervisor turns
-  descriptions into commands.
+The module-level `cluster_agent_graph = build_cluster_agent_graph()` compiles once at import time. The supervisor's `run_cluster_agent` node imports and invokes this instance.
 
-### Diagram TODO
+---
 
-- Need a diagram showing: sensor events enter from the left → cluster agent box
-  (showing the 3 nodes) → AnomalyFinding exits to the right.
-- Secondary: show that N cluster agents run in parallel (stub for now — Session 5 shows
-  the supervisor fan-out with Send API).
-- Reference: `docs/tutorial/assets/diag-02-cluster-agent-topology.md`
+## Walkthrough: the supervisor
 
-### Open questions / things to resolve before writing full prose
+### `src/agents/supervisor/state.py`
 
-- The docstring in `state.py` is really good — consider excerpting it directly into the
-  tutorial rather than rewriting.
-- Should we show the test as part of the session? `pytest tests/agents/test_cluster.py -v`
-  is already in the checkpoint — but showing what the test *checks* might help readers
-  understand what "done" looks like.
--->
+`SupervisorState` owns one complete analysis cycle:
+
+| Field | Type | Reducer | Purpose |
+|-------|------|---------|---------|
+| `active_cluster_ids` | `List[str]` | — | Which clusters to fan out to |
+| `events_by_cluster` | `Dict[str, List[...]]` | — | Input events, keyed by cluster |
+| `cluster_findings` | `List[AnomalyFinding]` | `aggregate_findings` | Merged findings from all cluster agents |
+| `situation_summary` | `Optional[str]` | — | Written by `assess_situation` |
+| `pending_commands` | `List[ActuatorCommand]` | — | Written by `decide_actions` |
+| `status` | `StatusValue` | — | Shared with cluster agent — same enum |
+
+`aggregate_findings` is the critical reducer here. Multiple `run_cluster_agent` nodes run in parallel and each returns `{"cluster_findings": [finding, ...]}`. Without a reducer, each return would overwrite the field. With `aggregate_findings`, LangGraph calls it once per parallel return, accumulating all findings into one deduplicated list.
+
+### `src/agents/supervisor/nodes.py`
+
+**`fan_out_to_clusters(state: SupervisorState) -> List[Send]`** — not a node. A conditional-edge function attached to START. Reads `active_cluster_ids` and `events_by_cluster` from supervisor state, builds one `ClusterAgentState` per cluster, wraps each in `Send("run_cluster_agent", ...)`. Returns the list to LangGraph, which dispatches them in parallel.
+
+**`run_cluster_agent(state: ClusterAgentState) -> dict`** — receives a `ClusterAgentState` (from the `Send`), calls `cluster_agent_graph.invoke(state)`, extracts `anomalies` from the result, returns `{"cluster_findings": anomalies}`. That return updates `SupervisorState.cluster_findings` via the `aggregate_findings` reducer.
+
+Note the state type: this node receives `ClusterAgentState`, not `SupervisorState`. The `Send` delivers exactly what `fan_out_to_clusters` put in it.
+
+**`assess_situation`**, **`decide_actions`**, **`dispatch_commands`** — all stubs. They log and return placeholder values. `dispatch_commands` uses the same closure/factory pattern as `report_findings` — it captures a `store` parameter for future use.
+
+### `src/agents/supervisor/graph.py`
+
+The graph topology:
+
+```
+START
+  │
+  └─▶ fan_out_to_clusters()   ← conditional edge, returns List[Send]
+        │
+        ├─▶ run_cluster_agent  ← parallel (one per Send)
+        ├─▶ run_cluster_agent
+        └─▶ run_cluster_agent
+        [synchronization barrier — aggregate_findings reducer runs]
+        │
+        ├─▶ assess_situation
+        ├─▶ decide_actions
+        └─▶ dispatch_commands → END
+```
+
+The `add_conditional_edges(START, fan_out_to_clusters, ["run_cluster_agent"])` call tells LangGraph that `fan_out_to_clusters` can only route to `"run_cluster_agent"`. This is required when the function returns `List[Send]` so LangGraph knows which nodes to expect.
+
+---
+
+## Run it
+
+```bash
+python main.py
+```
+
+Expected output:
+
+```
+=== Supervisor demo (full graph) ===
+2026-05-01 ... [INFO] agents.supervisor.nodes: Supervisor fanning out to 2 cluster(s): ['cluster-north', 'cluster-south']
+2026-05-01 ... [INFO] agents.supervisor.nodes: Supervisor invoking cluster agent for cluster=cluster-north
+2026-05-01 ... [INFO] agents.cluster.nodes: ClusterAgent[cluster-north] ingest_events: ingesting event from source=temp-n1
+2026-05-01 ... [INFO] agents.cluster.nodes: ClusterAgent[cluster-north] classify: STUB (no LLM)
+2026-05-01 ... [INFO] agents.cluster.nodes: ClusterAgent[cluster-north] report_findings: reporting 1 finding(s)
+2026-05-01 ... [INFO] agents.supervisor.nodes: Supervisor invoking cluster agent for cluster=cluster-south
+2026-05-01 ... [INFO] agents.cluster.nodes: ClusterAgent[cluster-south] ingest_events: ingesting event from source=unknown
+2026-05-01 ... [INFO] agents.cluster.nodes: ClusterAgent[cluster-south] classify: STUB (no LLM)
+2026-05-01 ... [INFO] agents.cluster.nodes: ClusterAgent[cluster-south] report_findings: reporting 1 finding(s)
+2026-05-01 ... [INFO] agents.supervisor.nodes: Supervisor dispatching 0 command(s)
+Status:   completed
+Summary:  [STUB] Received 2 finding(s) from 2 cluster(s).
+Findings: 2
+  - [cluster-north] stub_placeholder (confidence=0.5)
+    [STUB] classify node not yet implemented for cluster cluster-north
+  - [cluster-south] stub_placeholder (confidence=0.5)
+    [STUB] classify node not yet implemented for cluster cluster-south
+Commands: 0
+```
+
+Two things to look for:
+
+1. **Both cluster agents ran** — one for `cluster-north` (with a real event) and one for `cluster-south` (with no event, so trigger is `None`). The stub handles both without crashing.
+2. **The findings were merged** — `aggregate_findings` combined two separate `{"cluster_findings": [...]}` returns into one list of 2.
+
+You can also inspect the graph diagrams written to disk:
+- `cluster_graph.png` — the cluster agent topology
+- `supervisor_graph.png` — the supervisor topology
+
+---
+
+## What's next
+
+Session 3 adds structured logging via `node_tracer` — a decorator that wraps each node to emit timing and structured log records. The graph topology and state schemas do not change. You are adding observability around existing structure.
+
+Session 4 adds prompt management — a registry that loads and renders Jinja2 prompt templates. Still no LLM calls.
+
+Session 5 replaces the stub `classify` node with a real LLM ReAct loop. At that point the graph topology of the cluster agent changes (it gains a cycle), but the supervisor graph and the state boundary between them stay exactly as you built them here.

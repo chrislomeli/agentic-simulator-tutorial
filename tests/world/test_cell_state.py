@@ -1,4 +1,4 @@
-"""Tests for ogar.world.cell_state — CellState ABC and GenericCell."""
+"""Tests for world-simiulator.world.cell_state — CellState ABC and GenericCell."""
 
 import pytest
 

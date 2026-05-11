@@ -1,0 +1,43 @@
+{
+  "name": "lpnf-south",
+  "display_name": "Los Padres National Forest (Full South)",
+  "description": "Full southern district of Los Padres National Forest. Covers Ventura, Santa Barbara, and Kern counties. Includes all 22 active RAWS stations across four Cal Fire / USFS geographic responsibility zones. Elevations range from sea level (Santa Barbara coast) to ~8,800 ft (Mt Pinos).",
+  "calibration": "california",
+  "bounds": {
+    "lat_min": 34.25,
+    "lat_max": 35.15,
+    "lon_min": -119.95,
+    "lon_max": -118.45
+  },
+  "grid": { "rows": 50, "cols": 50 },
+  "clusters": [
+    "cluster-sb-coast",
+    "cluster-ventura-east",
+    "cluster-interior",
+    "cluster-cuyama"
+  ],
+  "raws_stations": [
+    { "stid": "RAWS-CARRIZO",         "name": "CARRIZO",           "lat": 35.096530, "lon": -119.773220, "cluster": "cluster-cuyama" },
+    { "stid": "RAWS-CUYAMA-VALLEY",   "name": "CUYAMA VALLEY",     "lat": 34.965370, "lon": -119.880150, "cluster": "cluster-cuyama" },
+    { "stid": "RAWS-CHUCHUPATE",      "name": "CHUCHUPATE",        "lat": 34.806370, "lon": -119.013630, "cluster": "cluster-interior" },
+    { "stid": "RAWS-CERRO-N",         "name": "LPF05 (CERRO N)",   "lat": 34.829270, "lon": -119.204030, "cluster": "cluster-interior" },
+    { "stid": "RAWS-OZENA",           "name": "OZENA",             "lat": 34.681780, "lon": -119.353730, "cluster": "cluster-interior" },
+    { "stid": "RAWS-ROSE-VALLEY",     "name": "ROSE VALLEY",       "lat": 34.543380, "lon": -119.184930, "cluster": "cluster-interior" },
+    { "stid": "RAWS-LOS-PRIETOS",     "name": "LOS PRIETOS",       "lat": 34.544400, "lon": -119.791290, "cluster": "cluster-sb-coast" },
+    { "stid": "RAWS-SAN-MARCOS-PASS", "name": "SAN MARCOS PASS",   "lat": 34.491330, "lon": -119.796390, "cluster": "cluster-sb-coast" },
+    { "stid": "RAWS-SB-BOTANIC",      "name": "SB BOTANIC GARDEN", "lat": 34.455890, "lon": -119.705630, "cluster": "cluster-sb-coast" },
+    { "stid": "RAWS-MONTECITO",       "name": "MONTECITO",         "lat": 34.461400, "lon": -119.649010, "cluster": "cluster-sb-coast" },
+    { "stid": "RAWS-MONTECITO-2",     "name": "MONTECITO #2",      "lat": 34.445000, "lon": -119.625830, "cluster": "cluster-sb-coast" },
+    { "stid": "RAWS-CARPINTERIA",     "name": "CARPINTERIA",       "lat": 34.444530, "lon": -119.513110, "cluster": "cluster-sb-coast" },
+    { "stid": "RAWS-CASITAS",         "name": "CASITAS",           "lat": 34.408180, "lon": -119.371240, "cluster": "cluster-sb-coast" },
+    { "stid": "RAWS-WHITAKER-PEAK",   "name": "WHITAKER PEAK",     "lat": 34.569380, "lon": -118.740190, "cluster": "cluster-ventura-east" },
+    { "stid": "RAWS-WARM-SPRINGS",    "name": "WARM SPRINGS",      "lat": 34.595830, "lon": -118.578610, "cluster": "cluster-ventura-east" },
+    { "stid": "RAWS-TEMESCAL",        "name": "TEMESCAL (LPF)",    "lat": 34.473940, "lon": -118.761560, "cluster": "cluster-ventura-east" },
+    { "stid": "RAWS-DEL-VALLE",       "name": "DEL VALLE",         "lat": 34.429720, "lon": -118.667120, "cluster": "cluster-ventura-east" },
+    { "stid": "RAWS-SAUGUS",          "name": "SAUGUS",            "lat": 34.435010, "lon": -118.513180, "cluster": "cluster-ventura-east" },
+    { "stid": "RAWS-WILEY-RIDGE",     "name": "WILEY RIDGE",       "lat": 34.371670, "lon": -118.840830, "cluster": "cluster-ventura-east" },
+    { "stid": "RAWS-NEWHALL-PASS",    "name": "NEWHALL PASS",      "lat": 34.336970, "lon": -118.520500, "cluster": "cluster-ventura-east" },
+    { "stid": "RAWS-HARMON",          "name": "HARMON",            "lat": 34.318310, "lon": -119.193670, "cluster": "cluster-ventura-east" },
+    { "stid": "RAWS-PORTER-RANCH",    "name": "PORTER RANCH",      "lat": 34.303390, "lon": -118.576610, "cluster": "cluster-ventura-east" }
+  ]
+}

@@ -1,5 +1,5 @@
 """
-ogar.transport.queue
+world-simiulator.transport.queue
 
 In-process async event queue — the pre-Kafka transport layer.
 
@@ -107,6 +107,16 @@ class SensorEventQueue:
             self._queue.qsize(),
         )
         return event
+
+    def get_nowait(self) -> SensorEvent:
+        """
+        Get the next event without blocking.
+
+        Raises asyncio.QueueEmpty if the queue has no events. Used by the
+        runtime orchestrator to drain a publisher tick's worth of events
+        in a single batch (after one initial blocking get()).
+        """
+        return self._queue.get_nowait()
 
     def task_done(self) -> None:
         """

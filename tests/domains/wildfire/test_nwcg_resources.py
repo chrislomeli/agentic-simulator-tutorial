@@ -1,4 +1,4 @@
-"""Tests for ogar.domains.wildfire.nwcg_resources."""
+"""Tests for world-simiulator.domains.wildfire.nwcg_resources."""
 
 import pytest
 

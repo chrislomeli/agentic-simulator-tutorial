@@ -1,5 +1,5 @@
 """
-ogar.domains.wildfire.fuel_models
+world-simiulator.domains.wildfire.fuel_models
 
 Rothermel fuel model parameters mapped to TerrainType.
 
@@ -36,6 +36,7 @@ class FuelModel:
     moisture_of_extinction  : Fuel moisture fraction above which fire won't sustain (0–1)
     description             : Human-readable fuel type summary
     """
+
     base_spread_rate_ft_min: float
     heat_content_btu_lb: float
     moisture_of_extinction: float
@@ -74,6 +75,7 @@ FUEL_MODELS: dict[TerrainType, FuelModel] = {
 }
 
 # ── Convenience helper ────────────────────────────────────────────────────────
+
 
 def get_fuel_model(terrain_type: TerrainType) -> FuelModel | None:
     """

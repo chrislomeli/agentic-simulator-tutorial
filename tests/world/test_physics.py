@@ -1,4 +1,4 @@
-"""Tests for ogar.world.physics — PhysicsModule ABC and StateEvent."""
+"""Tests for world-simiulator.world.physics — PhysicsModule ABC and StateEvent."""
 
 import pytest
 

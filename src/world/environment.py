@@ -1,5 +1,5 @@
 """
-ogar.world.environment
+world-simiulator.world.environment
 
 Abstract base class for domain-specific environment states.
 

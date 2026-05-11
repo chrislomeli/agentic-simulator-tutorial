@@ -1,5 +1,5 @@
 """
-ogar.domains.wildfire.sampler
+world-simiulator.domains.wildfire.sampler
 
 Samples local conditions from the world engine at a sensor's grid position.
 
@@ -60,9 +60,7 @@ def sample_local_conditions(
     own_cell = engine.grid.get_cell(grid_row, grid_col)
     own_state = own_cell.cell_state
     own_fire_intensity = (
-        own_state.fire_intensity
-        if own_state.fire_state == FireState.BURNING
-        else 0.0
+        own_state.fire_intensity if own_state.fire_state == FireState.BURNING else 0.0
     )
 
     # Heat from neighboring burning cells
@@ -79,14 +77,16 @@ def sample_local_conditions(
             dr = grid_row - cell.row
             dc = grid_col - cell.col
             dist = math.sqrt(dr * dr + dc * dc)
-            nearby_fire_cells.append({
-                "row": cell.row,
-                "col": cell.col,
-                "intensity": cell.cell_state.fire_intensity,
-                "distance": dist,
-                "dr": dr,
-                "dc": dc,
-            })
+            nearby_fire_cells.append(
+                {
+                    "row": cell.row,
+                    "col": cell.col,
+                    "intensity": cell.cell_state.fire_intensity,
+                    "distance": dist,
+                    "dr": dr,
+                    "dc": dc,
+                }
+            )
 
     return {
         "ambient_temperature_c": env.temperature_c,
@@ -126,9 +126,7 @@ def sample_thermal_region(
             if 0 <= r < engine.grid.rows and 0 <= c < engine.grid.cols:
                 state = engine.grid.get_cell(r, c).cell_state
                 fire_intensity = (
-                    state.fire_intensity
-                    if state.fire_state == FireState.BURNING
-                    else 0.0
+                    state.fire_intensity if state.fire_state == FireState.BURNING else 0.0
                 )
             else:
                 fire_intensity = 0.0

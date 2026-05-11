@@ -8,7 +8,7 @@ Changes to be committed:
         modified:   pyproject.toml
         deleted:    src/agents/cluster/cluster_graph.py
         new file:   src/agents/cluster/graph.py
-        new file:   src/agents/cluster/node_tracer.py
+        new file:   src/agents/cluster/node_executor.py
         new file:   src/agents/cluster/nodes.py
         modified:   src/agents/cluster/state.py
         modified:   src/bridge/pipeline_runner.py
@@ -137,9 +137,10 @@ This gives every graph invocation a unique identifier so the node tracer can tag
 Decorate the node functions:
 
 ```python
-from agents.cluster.node_tracer import node_trace
+from agents.commons.node_executor import node_executor
 
-@node_trace("ingest_events")
+
+@node_executor("ingest_events")
 def ingest_events(state: ClusterAgentState) -> dict:
     ...
 ```
@@ -156,7 +157,7 @@ from agents.cluster.nodes import (
 def build_cluster_agent_graph(store: Optional[BaseStore] = None):
     builder = StateGraph(ClusterAgentState)
     builder.add_node("ingest_events", ingest_events)
-    builder.add_node("classify", classify)
+    builder.add_node("evaluate", classify)
     builder.add_node("report_findings", make_report_findings(store=store))
     
     builder.add_edge(START, "ingest_events")

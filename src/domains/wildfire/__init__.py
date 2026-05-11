@@ -1,5 +1,5 @@
 """
-ogar.domains.wildfire
+world-simiulator.domains.wildfire
 
 Wildfire domain — stochastic fire spread on a terrain grid.
 

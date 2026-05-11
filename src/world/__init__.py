@@ -1,5 +1,5 @@
 """
-ogar.world
+world-simiulator.world
 
 The world engine — maintains ground truth that sensors sample from.
 
@@ -36,19 +36,17 @@ from world.grid import TerrainType as TerrainType
 from world.physics import PhysicsModule as PhysicsModule
 from world.physics import StateEvent as StateEvent
 from world.sensor_inventory import SensorInventory as SensorInventory
-from world.weather import WeatherState as WeatherState
 
 __all__ = [
     "CellState",
-    "GenericCell",
     "EnvironmentState",
-    "GenericGroundTruthSnapshot",
-    "GenericWorldEngine",
-    "GenericTerrainGrid",
     "FireState",
-    "TerrainType",
+    "GenericCell",
+    "GenericGroundTruthSnapshot",
+    "GenericTerrainGrid",
+    "GenericWorldEngine",
     "PhysicsModule",
-    "StateEvent",
     "SensorInventory",
-    "WeatherState",
+    "StateEvent",
+    "TerrainType",
 ]

@@ -1,5 +1,0 @@
-description: "Cluster agent classify prompt — wildfire anomaly detection"
-required_vars:
-  - cluster_id
-  - events
-  - trigger_id

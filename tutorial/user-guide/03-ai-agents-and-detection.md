@@ -206,7 +206,7 @@ class AnomalyFinding(TypedDict):
     affected_sensors: List[str]  # ["temp-001", "temp-002"]
     confidence: float            # 0.0–1.0
     summary: str                 # Human-readable explanation
-    raw_context: dict            # Supporting data (readings, thresholds, etc.)
+    raw_context: dict            # Supporting raw (readings, thresholds, etc.)
 ```
 
 **Example:**
@@ -424,7 +424,7 @@ class ActuatorCommand:
     source_agent: str        # "supervisor"
     cluster_id: str          # Target cluster
     priority: int            # 1–5 (5 = highest)
-    payload: dict            # Command-specific data
+    payload: dict            # Command-specific raw
     timestamp: datetime
 ```
 

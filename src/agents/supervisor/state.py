@@ -1,5 +1,5 @@
 """
-ogar.agents.supervisor.state
+world-simulator.agents.supervisor.state
 
 State schema for the supervisor LangGraph.
 
@@ -8,8 +8,8 @@ What is the supervisor?
 The supervisor owns the analysis workflow for one batch of triggered
 locations:
 
-  1. Receive a batch of events grouped by cluster.
-  2. Fan out to cluster agents via the Send API (parallel).
+  1. Receive a batch of CollatedRecords grouped by cluster.
+  2. Fan out to cluster agents via the Send API (parallel execution).
   3. Wait for ALL cluster agents to finish (synchronization barrier).
   4. Assess the overall situation across clusters.
   5. Decide which actuator commands to issue.
@@ -17,106 +17,123 @@ locations:
 
 Reducers
 ────────
-aggregate_findings: Cluster agents report findings in parallel. The
-  reducer merges each parallel update into one accumulated list,
-  deduplicated by finding_id, instead of overwriting.
+max_cluster_score: Records the highest risk score reported for each cluster
+  across parallel cluster-agent sends in a single tick. Because each cluster
+  is sent exactly once per tick, this is effectively a last-write-wins merge,
+  with max() as the defensive fallback if that ever changes.
+
+merge_cluster_findings: Stores the full list of CollatedRecordRisk objects
+  per cluster. Per-cluster entries overwrite (each cluster is sent once).
 
 messages: Standard add_messages — appends, never overwrites.
 
-Node responsibilities (skeleton — logic comes later)
-──────────────────────────────────────────────────────
-  fan_out_to_clusters : Returns List[Send] — one Send per active cluster.
-                        Conditional-edge function, NOT a regular node.
-  run_cluster_agent   : Wrapper that invokes the cluster subgraph.
-                        Receives a ClusterAgentState (from Send), returns
-                        a SupervisorState update with cluster_findings.
-  assess_situation    : Correlates findings across clusters.
-  decide_actions      : Chooses actuator commands.
-  dispatch_commands   : Sends commands; final node.
+Node responsibilities
+──────────────────────
+  fan_out_to_clusters : Conditional-edge function (not a node) that returns
+                        list[Send] — one Send per active cluster.
+  run_cluster_agent   : Invokes the cluster subgraph; lifts risk scores and
+                        findings into supervisor state via reducers.
+  assess_situation    : Stub — summarises findings across clusters.
+  decide_actions      : Stub — returns empty command list.
+  dispatch_commands   : Stub — logs commands; final node before END.
 """
 
 from __future__ import annotations
 
 import uuid
-from typing import Annotated, Any, Dict, List, Optional
+from typing import Annotated, Any, NewType
 
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
+from langgraph.graph.state import CompiledStateGraph
 from pydantic import BaseModel, Field
 
-from agents.cluster.state import AnomalyFinding, StatusValue
+from agents.commons.schemas import CollatedRecord, CollatedRecordRisk, TracedState
+
+# ── Typed graph ────────────────────────────────────────────────────
+SupervisorGraph = NewType("SupervisorGraph", CompiledStateGraph)
 
 
 # ── Stub actuator command ────────────────────────────────────────────────────
-# A real implementation will live in src/actuators/. For the stub flow we
+# Real implementation lives in src/actuators/. For the stub flow we
 # just need a structured container the dispatch node can log.
 
+
 class ActuatorCommand(BaseModel):
-    """Tiny stub of an actuator command for the dummy flow."""
+    """Stub actuator command — placeholder until src/actuators/ is implemented."""
+
     command_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     command_type: str
     cluster_id: str
-    payload: Dict[str, Any] = Field(default_factory=dict)
+    payload: dict[str, Any] = Field(default_factory=dict)
     priority: int = 3
 
 
-# ── Custom reducer for aggregating cluster findings ──────────────────────────
+# ── Reducers ─────────────────────────────────────────────────────────────────
 
-def aggregate_findings(
-    existing: List[AnomalyFinding],
-    incoming: List[AnomalyFinding],
-) -> List[AnomalyFinding]:
-    """
-    Accumulate findings from parallel cluster agent invocations.
 
-    Each Send-target run returns its findings as a separate update.
-    This reducer merges them into a single list, deduplicating by
-    finding_id so a re-invocation cannot double-count.
+def max_cluster_score(
+    existing: dict[str, RiskScore],
+    incoming: dict[str, RiskScore],
+) -> dict[str, RiskScore]:
+
+    merged = dict(existing)
+    for cluster_id, score in incoming.items():
+        current = merged.get(cluster_id)
+        merged[cluster_id] = (
+            max([current, score], key=lambda s: s.risk_score if s else -1) if current else score
+        )
+    return merged
+
+
+def merge_cluster_findings(
+    existing: dict[str, list[CollatedRecordRisk]],
+    incoming: dict[str, list[CollatedRecordRisk]],
+) -> dict[str, list[CollatedRecordRisk]]:
+    """Merge per-cluster risk findings by overwriting each cluster's entry.
+
+    Each cluster is fanned-out exactly once per supervisor invocation, so
+    the incoming entry for a cluster always replaces the prior value.
     """
-    existing_ids = {f.finding_id for f in existing}
-    new = [f for f in incoming if f.finding_id not in existing_ids]
-    return existing + new
+    merged = dict(existing)
+    for cluster_id, risks in incoming.items():
+        merged[cluster_id] = risks
+    return merged
 
 
 # ── Supervisor state ─────────────────────────────────────────────────────────
 
-class SupervisorState(BaseModel):
+
+class RiskScore(BaseModel):
+    risk_score: int
+    confidence: int
+
+
+class SupervisorState(TracedState):
     """
     The internal working state for one supervisor graph execution.
 
-    One execution = one batch from the event loop / orchestrator.
+    One execution = one batch of CollatedRecords from the orchestrator.
     """
 
     # ── Identity ─────────────────────────────────────────────────────
-    session_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     workflow_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
 
     # ── Input ────────────────────────────────────────────────────────
-    # Which clusters fan_out_to_clusters will target.
-    active_cluster_ids: List[str] = Field(default_factory=list)
+    clusters: dict[str, list[CollatedRecord]] = Field(default_factory=dict)
 
-    # Events grouped by cluster_id. Passed in by the caller (event loop).
-    # fan_out_to_clusters reads this to populate each cluster agent's
-    # sensor_events before invoking it via Send.
-    events_by_cluster: Dict[str, List[Any]] = Field(default_factory=dict)
+    # ── Aggregated output of cluster fan-out ─────────────────────────
+    cluster_score: Annotated[dict[str, RiskScore], max_cluster_score] = Field(default_factory=dict)
 
-    # ── Aggregated findings (output of cluster fan-out) ──────────────
-    # Populated by run_cluster_agent (one update per parallel invocation).
-    # The aggregate_findings reducer merges results after the
-    # synchronization barrier.
-    cluster_findings: Annotated[List[AnomalyFinding], aggregate_findings] = Field(
-        default_factory=list
+    cluster_findings: Annotated[dict[str, list[CollatedRecordRisk]], merge_cluster_findings] = (
+        Field(default_factory=dict)
     )
 
-    # ── LLM reasoning (used once an LLM is wired in) ─────────────────
-    messages: Annotated[List[BaseMessage], add_messages] = Field(default_factory=list)
+    # ── LLM reasoning (reserved for when the LLM is wired in) ────────
+    messages: Annotated[list[BaseMessage], add_messages] = Field(default_factory=list)
 
     # ── Decision output ──────────────────────────────────────────────
-    pending_commands: List[ActuatorCommand] = Field(default_factory=list)
+    pending_commands: list[ActuatorCommand] = Field(default_factory=list)
 
     # ── Situation summary ────────────────────────────────────────────
-    situation_summary: Optional[str] = None
-
-    # ── Control ──────────────────────────────────────────────────────
-    status: StatusValue = Field(default=StatusValue.IDLE)
-    error_message: Optional[str] = None
+    situation_summary: str | None = None

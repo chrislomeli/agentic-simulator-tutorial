@@ -218,7 +218,7 @@ The supervisor and cluster agents have different state schemas. The supervisor c
 cluster_state: ClusterAgentState = {
     "cluster_id": cluster_id,                    # From supervisor's active_cluster_ids
     "workflow_id": f"{cluster_id}::supervisor-fanout",
-    "sensor_events": [],                         # Empty — supervisor doesn't have sensor data
+    "sensor_events": [],                         # Empty — supervisor doesn't have sensor raw
     "trigger_event": None,                       # No specific trigger
     "messages": [],                              # Fresh conversation
     "anomalies": [],                             # Will be populated by cluster agent

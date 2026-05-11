@@ -1,149 +1,238 @@
 """
-ogar.agents.cluster.nodes
+world-simulator.agents.cluster.nodes
 
-Node functions for the cluster agent LangGraph subgraph.
+Node functions for the cluster agent's risk assessment pipeline.
 
-These are the stateful functions that process state — ingest, classify,
-report findings, and route between them. Wrapped with @node_trace for
-automatic per-node timing and structured logging.
+Pipeline shape (dashboard milestone)
+──────────────────────────────────────
+    START → evaluate → route_after_evaluate → report_risk → END
 
-The graph builder (add_node, add_edge, compile) lives in graph.py.
+    evaluate    : AI boundary. Stub mode returns deterministic placeholder
+                  risk scores (STUB_RISK_SCORE=True). LLM mode calls the
+                  model with structured output — enabled in the next milestone.
+    report_risk : Terminal node. Persists CollatedRecordRisk records to the
+                  optional store and marks the pipeline COMPLETED.
+
+Design principles
+─────────────────
+  - The AI boundary is explicit: ``evaluate`` is the only node that will
+    call an LLM. If the agent produces bad output, debug the prompt and
+    tools — not the pipeline structure.
+  - Nodes return PARTIAL state updates. LangGraph merges them via reducers.
+  - Nodes that need dependencies (prompt registry, LLM, store) are exposed
+    as ``make_*`` factories so the graph builder can thread them in at
+    compile time — no side effects at import time.
 """
 
-import logging
-from typing import Literal, Optional
-from uuid import uuid4
+from __future__ import annotations
 
-from langgraph.graph import END, START, StateGraph
+import json
+import logging
+
+from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.store.base import BaseStore
 
-from agents.cluster.node_tracer import node_trace
-from agents.cluster.state import AnomalyFinding, ClusterAgentState, StatusValue
-from prompts import registry
+from agents.cluster.state import ClusterAgentState
+from agents.commons.llm_registry import LLMRegistry
+from agents.commons.node_executor import node_executor
+from agents.commons.routing import route_base
+from agents.commons.schemas import (
+    CollatedRecord,
+    CollatedRecordRisk,
+    RiskAssessment,
+)
+from agents.commons.state_types import StatusValue
+from world.risk_heat_map import RiskHeatMap
+from prompts import PromptRegistry
 
 logger = logging.getLogger(__name__)
 
+# ── Milestone flag ────────────────────────────────────────────────────────────
+#
+# True for the dashboard milestone: evaluate returns stub CollatedRecordRisk
+# records without calling an LLM. Flip to False in the next milestone once
+# the prompt template and LLM tooling are ready.
+STUB_RISK_SCORE = False
 
-# ── Node functions ────────────────────────────────────────────────────────────
-# Each node receives the full ClusterAgentState state and returns a PARTIAL state update.
-# LangGraph merges the partial update into the current state using reducers.
-# Nodes should only return the fields they actually changed.
-@node_trace("ingest_events")
-def ingest_events(state: ClusterAgentState) -> dict:
+
+# ── Node: evaluate ────────────────────────────────────────────────────────────
+
+
+def make_evaluate_node(
+    prompt_registry: PromptRegistry,
+    llm_registry: LLMRegistry,
+    heat_map: RiskHeatMap,
+):
+    """Factory that creates the evaluate node.
+
+    This is the AI boundary. Everything before this node is deterministic.
+    The evaluate node receives CollatedRecords and produces CollatedRecordRisk
+    assessments — one per cell — by reasoning about fire risk.
+
+    Parameters
+    ──────────
+    prompt_registry : PromptRegistry
+        For rendering the system prompt template when LLM mode is active.
+    llm_registry : LLMRegistry
+        For looking up the LLM to use (role: "classifier") when LLM mode
+        is active. Unused in stub mode.
+    heat_map : RiskHeatMap
+        In-memory grid-aligned layer for supervisor resource queries.
+        Updated after each risk assessment.
     """
-    First node — acknowledges the trigger event and sets status to processing.
-    It takes a ClusterAgentState in, and adds the status to the state - all of the actual processing will happen in the classify node (next)
 
-    In a real implementation this node might also:
-      - Validate the incoming event schema
-      - Load recent history from the LangGraph Store
-      - Decide whether the event is worth classifying (pre-filter)
+    @node_executor("evaluate")
+    def evaluate(state: ClusterAgentState) -> dict:
+        """Evaluate fire risk for every CollatedRecord in this cluster.
 
-    For now, we just log and set the status to "processing"
-    """
+        Stub mode (STUB_RISK_SCORE=True):
+          Returns deterministic placeholder scores — one per record.
+          No LLM is called. Used to validate the full pipeline topology
+          and drive the dashboard before the prompt template is ready.
 
-    # Return only the fields we're changing.
-    # LangGraph merges this with the existing state.
-    return {
-        "status": StatusValue.PROCESSING,
-        "error_message": None,   # Clear any previous error
-    }
+        LLM mode (STUB_RISK_SCORE=False, next milestone):
+          Renders the system prompt, serialises all records as the human
+          message, and calls the LLM with structured output (RiskAssessment).
 
-@node_trace("classify")
-def classify(state: ClusterAgentState) -> dict:
-    """
-    Stub classify node — used when no LLM is provided.
+        State reads
+        ───────────
+          - state.collated_records : pre-populated by the orchestrator
+          - state.cluster_id      : for logging and LLM context
 
-    Produces a placeholder finding so the rest of the pipeline
-    has something to work with end-to-end.
-    """
-
-    cluster_id = state.cluster_id
-    trigger = state.trigger_event
-
-    sys_content = registry.render("classify", {
-        "cluster_id": cluster_id,
-        "events": state.sensor_events,
-        "trigger_id": trigger.source_id if trigger else "none",
-    })
-
-
-
-
-
-    stub_finding: AnomalyFinding = AnomalyFinding(
-        finding_id= str(uuid4()),
-        cluster_id= cluster_id,
-        anomaly_type= "stub_placeholder",
-        affected_sensors= [trigger.source_id] if trigger else [],
-        confidence= 0.5,
-        summary= f"[STUB] classify node not yet implemented for cluster {cluster_id}",
-        raw_context={
-            "trigger_event_id": trigger.event_id if trigger else None,
-            "event_count_in_window": len(state.sensor_events),
-        },
-    )
-
-    return {
-        "anomalies": [stub_finding],
-        "status": StatusValue.PROCESSING,
-    }
-
-def make_report_findings(store: Optional[BaseStore] = None):
-    @node_trace("report_findings")
-    def report_findings(state: ClusterAgentState) -> dict:
+        State writes
+        ────────────
+          - risk_assessments : list[CollatedRecordRisk], one per record
+          - status           : PROCESSING
         """
-        Final node — logs findings and writes each AnomalyFinding to the
-        LangGraph Store so the supervisor can recall past incidents.
+        records: list[CollatedRecord] = state.collated_records
+        cluster_id: str = state.cluster_id
 
-        Store write (when store is provided):
-          namespace : ("incidents", cluster_id)
-          key       : finding_id  (UUID — stable across restarts)
-          value     : the full AnomalyFinding dict
+        if not records:
+            logger.warning("ClusterAgent[%s] evaluate: no collated records", cluster_id)
+            return {
+                "risk_assessments": [],
+                "status": StatusValue.PROCESSING,
+            }
 
-        store is injected by LangGraph at compile time via
-        builder.compile(store=store) — any node whose signature includes
-        `store: Optional[BaseStore]` receives it automatically.
-        """
-        anomalies = state.anomalies or []
-        cluster_id = state.cluster_id
+        # get prompt text
+        system_prompt = prompt_registry.render(
+            "evaluate",
+            {"cluster_id": cluster_id},
+        )
 
-        if store is not None and anomalies:
-            for finding in anomalies:
-                store.put(
-                    ("incidents", cluster_id),
-                    finding.finding_id,
-                    finding.model_dump(),
-                )
-            logger.info(
-                "ClusterAgent[%s] wrote %d finding(s) to store",
-                cluster_id,
-                len(anomalies),
+        human_prompt = json.dumps([r.model_dump(mode="json") for r in records], indent=2)
+
+        if not STUB_RISK_SCORE:
+            # ONE LLM call for the entire cluster — the AI boundary. The model
+            # sees every cell with raw in this cluster and reasons holistically.
+            llm = llm_registry.get("classifier")
+
+            BLUE = "\033[34m"
+            RESET = "\033[0m"
+            print(f"""\n{BLUE}● CALLING LLM CLIENT {RESET}""")
+
+            risk_assessment: RiskAssessment = llm.with_structured_output(RiskAssessment).invoke(
+                [
+                    SystemMessage(system_prompt),
+                    HumanMessage(human_prompt),
+                ]
             )
+            # Update heat map with new risk assessments
+            for risk in risk_assessment.collated_record_risks:
+                heat_map.update_from_assessment(risk)
+            
+            return {
+                "risk_assessments": risk_assessment.collated_record_risks,
+                "status": StatusValue.PROCESSING,
+            }
 
-        # No state change needed — anomalies are already in state
+        # Stub: one placeholder risk per record, position copied from input.
+        risks = [
+            CollatedRecordRisk(
+                position=cr.position,
+                risk_score=5,
+                confidence=3,
+                confidence_rationale="Stub score — LLM not active in this milestone.",
+                contributing_factors=["stub"],
+            )
+            for cr in records
+        ]
+        # Update heat map with stub risk assessments
+        for risk in risks:
+            heat_map.update_from_assessment(risk)
+        
         return {
+            "risk_assessments": risks,
             "status": StatusValue.PROCESSING,
         }
 
-    return report_findings
+    return evaluate
+
+
+# ── Node: report_risk ─────────────────────────────────────────────────────────
+
+
+def make_report_risk_node(store: BaseStore | None = None):
+    """Factory that creates the risk reporting node.
+
+    Parameters
+    ──────────
+    store : BaseStore or None
+        Optional LangGraph store. When provided, each CollatedRecordRisk is
+        written under (``"risk_assessments"``, cluster_id) keyed by
+        ``"{row}_{col}"`` for retrieval by the supervisor or a dashboard.
+    """
+
+    @node_executor("report_risk")
+    def report_risk(state: ClusterAgentState) -> dict:
+        """Terminal node — persists risk assessments and marks pipeline complete.
+
+        State reads
+        ───────────
+          - state.risk_assessments : what to report
+          - state.cluster_id      : for store namespace
+
+        State writes
+        ────────────
+          - status : COMPLETED
+        """
+        assessments = state.risk_assessments
+        cluster_id = state.cluster_id
+
+        if store is not None and assessments:
+            for assessment in assessments:
+                key = f"{assessment.position.row}_{assessment.position.col}"
+                store.put(
+                    ("risk_assessments", cluster_id),
+                    key,
+                    assessment.model_dump(mode="json"),
+                )
+            logger.info(
+                "ClusterAgent[%s] wrote %d risk assessment(s) to store",
+                cluster_id,
+                len(assessments),
+            )
+        else:
+            logger.info(
+                "ClusterAgent[%s] completed with %d risk assessment(s)",
+                cluster_id,
+                len(assessments) if assessments else 0,
+            )
+
+        return {"status": StatusValue.COMPLETED}
+
+    return report_risk
+
 
 # ── Routers ──────────────────────────────────────────────────────────────────
 
-def route_after_classify(
-    state: ClusterAgentState,
-) -> Literal["report_findings", "__end__"]:
+
+def route_after_evaluate(state: ClusterAgentState) -> str:
+    """Conditional edge router after evaluate node.
+
+    Delegates to route_base:
+      - status == ERROR     → END
+      - status == COMPLETED → END
+      - otherwise           → "report_risk"
     """
-    Router for stub mode — classify always goes to report_findings.
-    """
-
-    if state.status == StatusValue.ERROR:
-        logger.warning(
-            "ClusterAgent[%s] ROUTER: route_after_classify exiting due to error: %s",
-            state.cluster_id,
-            state.error_message,
-        )
-        return "__end__"
-
-    return "report_findings"
-
+    return route_base(state, next_node="report_risk")

@@ -1,5 +1,5 @@
 """
-ogar.transport.schemas
+world-simiulator.transport.schemas
 
 The canonical SensorEvent envelope.
 
@@ -57,7 +57,7 @@ confidence  : Float 0.0–1.0.  Set by the sensor based on its own
               0.0 = sensor is reporting but considers itself faulty.
               Agents can use this to weight readings.
 
-payload     : The actual reading data.  Opaque dict.  The envelope
+payload     : The actual reading raw.  Opaque dict.  The envelope
               carries it but never inspects it.  Structure is
               defined by the sensor type and documented in the
               sensor's own module.
@@ -88,24 +88,19 @@ class SensorEvent(BaseModel):
     event_id: str = Field(
         description="UUID string. Unique per emission. Used for dedup downstream."
     )
-    source_id: str = Field(
-        description="Stable sensor instance identifier. e.g. 'temp-sensor-A1'."
-    )
+    source_id: str = Field(description="Stable sensor instance identifier. e.g. 'temp-sensor-A1'.")
     source_type: str = Field(
         description="Opaque string tag. Tells agents how to unpack payload. "
-                    "e.g. 'temperature', 'smoke', 'wind'."
+        "e.g. 'temperature', 'smoke', 'wind'."
     )
     cluster_id: str = Field(
         description="Routing key. Bridge consumer uses this to pick the target workflow."
     )
 
     # ── Timing fields ─────────────────────────────────────────────────
-    timestamp: datetime = Field(
-        description="UTC wall-clock time of the reading."
-    )
+    timestamp: datetime = Field(description="UTC wall-clock time of the reading.")
     sim_tick: int = Field(
-        default=0,
-        description="Simulation tick counter. 0 when not in simulation mode."
+        default=0, description="Simulation tick counter. 0 when not in simulation mode."
     )
 
     # ── Trust field ───────────────────────────────────────────────────
@@ -114,17 +109,17 @@ class SensorEvent(BaseModel):
         ge=0.0,
         le=1.0,
         description="Sensor self-reported health. 1.0 = fully reliable. "
-                    "0.0 = sensor considers itself faulty."
+        "0.0 = sensor considers itself faulty.",
     )
 
     # ── Opaque content ────────────────────────────────────────────────
     payload: dict[str, Any] = Field(
         default_factory=dict,
-        description="Domain-specific reading data. Envelope never inspects this."
+        description="Domain-specific reading raw. Envelope never inspects this.",
     )
     metadata: dict[str, Any] = Field(
         default_factory=dict,
-        description="Optional pass-through extras. Firmware version, GPS coords, etc."
+        description="Optional pass-through extras. Firmware version, GPS coords, etc.",
     )
 
     # ── Factory method ────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 """
-ogar.resources.inventory
+world-simiulator.resources.inventory
 
 ResourceInventory — management of resource placement on a grid.
 
@@ -70,9 +70,9 @@ class ResourceInventory:
         """
         self._grid_rows = grid_rows
         self._grid_cols = grid_cols
-        self._resources: dict[str, ResourceBase] = {}           # resource_id → resource
-        self._type_index: dict[str, set[str]] = {}              # resource_type → {resource_ids}
-        self._cluster_index: dict[str, set[str]] = {}           # cluster_id → {resource_ids}
+        self._resources: dict[str, ResourceBase] = {}  # resource_id → resource
+        self._type_index: dict[str, set[str]] = {}  # resource_type → {resource_ids}
+        self._cluster_index: dict[str, set[str]] = {}  # cluster_id → {resource_ids}
 
     # ── Registration ─────────────────────────────────────────────────────────
 
@@ -85,11 +85,10 @@ class ResourceInventory:
           - The position is out of grid bounds
         """
         if resource.resource_id in self._resources:
-            raise ValueError(
-                f"Resource {resource.resource_id!r} is already registered"
-            )
-        if not (0 <= resource.grid_row < self._grid_rows
-                and 0 <= resource.grid_col < self._grid_cols):
+            raise ValueError(f"Resource {resource.resource_id!r} is already registered")
+        if not (
+            0 <= resource.grid_row < self._grid_rows and 0 <= resource.grid_col < self._grid_cols
+        ):
             raise ValueError(
                 f"Position ({resource.grid_row}, {resource.grid_col}) out of bounds "
                 f"for grid ({self._grid_rows}×{self._grid_cols})"
@@ -99,8 +98,11 @@ class ResourceInventory:
         self._cluster_index.setdefault(resource.cluster_id, set()).add(resource.resource_id)
         logger.debug(
             "Registered resource %s (%s) at (%d, %d) in cluster %s",
-            resource.resource_id, resource.resource_type,
-            resource.grid_row, resource.grid_col, resource.cluster_id,
+            resource.resource_id,
+            resource.resource_type,
+            resource.grid_row,
+            resource.grid_col,
+            resource.cluster_id,
         )
 
     def unregister(self, resource_id: str) -> ResourceBase:
@@ -135,10 +137,7 @@ class ResourceInventory:
 
     def get_resources_at(self, row: int, col: int) -> list[ResourceBase]:
         """Return all resources placed at the given grid position."""
-        return [
-            r for r in self._resources.values()
-            if r.grid_row == row and r.grid_col == col
-        ]
+        return [r for r in self._resources.values() if r.grid_row == row and r.grid_col == col]
 
     def all_resources(self) -> list[ResourceBase]:
         """Return all registered resources."""
@@ -198,7 +197,9 @@ class ResourceInventory:
         resource.deploy(row=row, col=col)
         logger.info(
             "Deployed resource %s at (%d, %d)",
-            resource_id, resource.grid_row, resource.grid_col,
+            resource_id,
+            resource.grid_row,
+            resource.grid_col,
         )
 
     def release(self, resource_id: str) -> None:
@@ -239,7 +240,9 @@ class ResourceInventory:
                 "total": len(typed),
                 "available": sum(1 for r in typed if r.status == ResourceStatus.AVAILABLE),
                 "deployed": sum(1 for r in typed if r.status == ResourceStatus.DEPLOYED),
-                "out_of_service": sum(1 for r in typed if r.status == ResourceStatus.OUT_OF_SERVICE),
+                "out_of_service": sum(
+                    1 for r in typed if r.status == ResourceStatus.OUT_OF_SERVICE
+                ),
                 "total_capacity": sum(r.capacity for r in typed),
                 "available_capacity": sum(r.available for r in typed),
             }
@@ -313,7 +316,10 @@ class ResourceInventory:
 
         logger.info(
             "Reduced %s resources: kept %d/%d, removed %d",
-            resource_type, len(rids) - len(removed), len(rids), len(removed),
+            resource_type,
+            len(rids) - len(removed),
+            len(rids),
+            len(removed),
         )
         return removed
 
@@ -341,7 +347,9 @@ class ResourceInventory:
 
         logger.info(
             "Disabled %d/%d %s resources",
-            len(targets), len(rids), resource_type,
+            len(targets),
+            len(rids),
+            resource_type,
         )
         return targets
 

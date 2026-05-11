@@ -1,4 +1,4 @@
-"""Tests for ogar.world.generic_engine — GenericWorldEngine."""
+"""Tests for world-simiulator.world.generic_engine — GenericWorldEngine."""
 
 import pytest
 from typing import Any, Dict, List

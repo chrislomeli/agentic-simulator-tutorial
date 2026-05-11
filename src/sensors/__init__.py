@@ -1,5 +1,5 @@
 """
-ogar.sensors
+world-simiulator.sensors
 
 Abstract sensor base class and concrete sensor implementations.
 

@@ -1,5 +1,5 @@
 """
-ogar.domains.wildfire.rothermel_physics
+world-simiulator.domains.wildfire.rothermel_physics
 
 RothermelFirePhysicsModule — simplified Rothermel fire spread model.
 
@@ -118,9 +118,7 @@ class RothermelFirePhysicsModule(PhysicsModule[FireCellState]):
 
         wind_row, wind_col = environment.wind_vector()
 
-        burning = grid.cells_where(
-            lambda c: c.cell_state.fire_state == FireState.BURNING
-        )
+        burning = grid.cells_where(lambda c: c.cell_state.fire_state == FireState.BURNING)
 
         newly_ignited: set[tuple[int, int, int]] = set()
 
@@ -131,17 +129,18 @@ class RothermelFirePhysicsModule(PhysicsModule[FireCellState]):
             fuel_model = get_fuel_model(state.terrain_type)
             if fuel_model is None:
                 # Non-burnable terrain that somehow caught fire — extinguish it.
-                events.append(StateEvent(
-                    row=row, col=col,
-                    new_state=state.extinguished(),
-                ))
+                events.append(
+                    StateEvent(
+                        row=row,
+                        col=col,
+                        new_state=state.extinguished(),
+                    )
+                )
                 continue
 
             # ── Heading ROS and derived metrics ──────────────────────
             # Use full wind speed (heading into wind) for metric storage.
-            heading_ros = self._compute_ros(
-                fuel_model, environment, state, wind_alignment=1.0
-            )
+            heading_ros = self._compute_ros(fuel_model, environment, state, wind_alignment=1.0)
             flame_len = self._compute_flame_length(heading_ros, fuel_model.heat_content_btu_lb)
             moisture_factor = self._moisture_factor(state.fuel_moisture)
             intensity = self._compute_fireline_intensity(
@@ -152,18 +151,23 @@ class RothermelFirePhysicsModule(PhysicsModule[FireCellState]):
             if state.fire_start_tick is not None:
                 ticks_burning = tick - state.fire_start_tick
                 if ticks_burning >= self._burn_duration:
-                    events.append(StateEvent(
-                        row=row, col=col,
-                        new_state=state.extinguished(),
-                    ))
+                    events.append(
+                        StateEvent(
+                            row=row,
+                            col=col,
+                            new_state=state.extinguished(),
+                        )
+                    )
                     continue
 
             # ── Update metrics on still-burning cell ──────────────────
-            updated = state.model_copy(update={
-                "rate_of_spread_ft_min": round(heading_ros, 3),
-                "flame_length_ft": round(flame_len, 3),
-                "fireline_intensity_btu_ft_s": round(intensity, 3),
-            })
+            updated = state.model_copy(
+                update={
+                    "rate_of_spread_ft_min": round(heading_ros, 3),
+                    "flame_length_ft": round(flame_len, 3),
+                    "fireline_intensity_btu_ft_s": round(intensity, 3),
+                }
+            )
             events.append(StateEvent(row=row, col=col, new_state=updated))
 
             # ── Try to spread to each burnable neighbor ───────────────
@@ -215,23 +219,24 @@ class RothermelFirePhysicsModule(PhysicsModule[FireCellState]):
                     )
                     norm_intensity = min(1.0, intensity / 2000.0)
 
-                    events.append(StateEvent(
-                        row=nr, col=nc,
-                        new_state=neighbor_state.ignited(
-                            tick=tick,
-                            intensity=max(0.1, norm_intensity),
-                            rate_of_spread_ft_min=round(n_ros, 3),
-                            flame_length_ft=round(n_flame, 3),
-                            fireline_intensity_btu_ft_s=round(n_intensity, 3),
-                        ),
-                    ))
+                    events.append(
+                        StateEvent(
+                            row=nr,
+                            col=nc,
+                            new_state=neighbor_state.ignited(
+                                tick=tick,
+                                intensity=max(0.1, norm_intensity),
+                                rate_of_spread_ft_min=round(n_ros, 3),
+                                flame_length_ft=round(n_flame, 3),
+                                fireline_intensity_btu_ft_s=round(n_intensity, 3),
+                            ),
+                        )
+                    )
                     newly_ignited.add((nr, nc, _nl))
 
         return events
 
-    def summarize(
-        self, grid: GenericTerrainGrid[FireCellState]
-    ) -> dict[str, Any]:
+    def summarize(self, grid: GenericTerrainGrid[FireCellState]) -> dict[str, Any]:
         """
         Return a fire-specific summary including Rothermel behavior metrics.
 
@@ -352,7 +357,7 @@ class RothermelFirePhysicsModule(PhysicsModule[FireCellState]):
         Returns flame length in feet.
         """
         val = ros * heat_content_btu_lb / 500.0
-        return max(0.0, val ** 0.46)
+        return max(0.0, val**0.46)
 
     def _compute_fireline_intensity(
         self,

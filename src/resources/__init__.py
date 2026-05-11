@@ -1,5 +1,5 @@
 """
-ogar.resources
+world-simiulator.resources
 
 Resource management for preparedness assets on the world grid.
 

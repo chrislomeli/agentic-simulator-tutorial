@@ -1,0 +1,21 @@
+{
+  "name": "lpnf-corridor-to-coast",
+  "extends": "lpnf-south",
+  "description": "Hot, dry, windy day on the lpnf-south baseline. Single ignition in the NE interior GRASSLAND mass. Prevailing 45-degree wind drives fire SW through continuous fuel toward the Carpinteria-side urban interface (rows 38-40, cols 3-11). Validation target for the fire-aware sampler. See companion lpnf-corridor-to-coast.md for hypothesis, stakes, and expected observations.",
+
+  "environment": {
+    "temperature_c": 38.0,
+    "humidity_pct": 12.0,
+    "wind_speed_mps": 11.0,
+    "wind_direction_deg": 45.0,
+    "pressure_hpa": 1010.0
+  },
+
+  "defaults": {
+    "fuel_moisture": 0.08
+  },
+
+  "ignition": [
+    { "row": 8, "col": 32, "intensity": 0.85 }
+  ]
+}

@@ -1,0 +1,67 @@
+grid_row,grid_column,elevation,sensor_id,sensor_name,sensor_type,cluster_name,noise_std
+2,5,0,RAWS-CARRIZO-temp,CARRIZO,temperature,cluster-cuyama,0.3
+2,5,0,RAWS-CARRIZO-humidity,CARRIZO,humidity,cluster-cuyama,0.5
+2,5,0,RAWS-CARRIZO-wind,CARRIZO,wind,cluster-cuyama,
+10,2,0,RAWS-CUYAMA-VALLEY-temp,CUYAMA VALLEY,temperature,cluster-cuyama,0.3
+10,2,0,RAWS-CUYAMA-VALLEY-humidity,CUYAMA VALLEY,humidity,cluster-cuyama,0.5
+10,2,0,RAWS-CUYAMA-VALLEY-wind,CUYAMA VALLEY,wind,cluster-cuyama,
+17,24,0,RAWS-CERRO-N-temp,LPF05 (CERRO N),temperature,cluster-interior,0.3
+17,24,0,RAWS-CERRO-N-humidity,LPF05 (CERRO N),humidity,cluster-interior,0.5
+17,24,0,RAWS-CERRO-N-wind,LPF05 (CERRO N),wind,cluster-interior,
+19,31,0,RAWS-CHUCHUPATE-temp,CHUCHUPATE,temperature,cluster-interior,0.3
+19,31,0,RAWS-CHUCHUPATE-humidity,CHUCHUPATE,humidity,cluster-interior,0.5
+19,31,0,RAWS-CHUCHUPATE-wind,CHUCHUPATE,wind,cluster-interior,
+26,19,0,RAWS-OZENA-temp,OZENA,temperature,cluster-interior,0.3
+26,19,0,RAWS-OZENA-humidity,OZENA,humidity,cluster-interior,0.5
+26,19,0,RAWS-OZENA-wind,OZENA,wind,cluster-interior,
+33,5,0,RAWS-LOS-PRIETOS-temp,LOS PRIETOS,temperature,cluster-sb-coast,0.3
+33,5,0,RAWS-LOS-PRIETOS-humidity,LOS PRIETOS,humidity,cluster-sb-coast,0.5
+33,5,0,RAWS-LOS-PRIETOS-wind,LOS PRIETOS,wind,cluster-sb-coast,
+36,5,0,RAWS-SAN-MARCOS-PASS-temp,SAN MARCOS PASS,temperature,cluster-sb-coast,0.3
+36,5,0,RAWS-SAN-MARCOS-PASS-humidity,SAN MARCOS PASS,humidity,cluster-sb-coast,0.5
+36,5,0,RAWS-SAN-MARCOS-PASS-wind,SAN MARCOS PASS,wind,cluster-sb-coast,
+38,8,0,RAWS-SB-BOTANIC-temp,SB BOTANIC GARDEN,temperature,cluster-sb-coast,0.3
+38,8,0,RAWS-SB-BOTANIC-humidity,SB BOTANIC GARDEN,humidity,cluster-sb-coast,0.5
+38,8,0,RAWS-SB-BOTANIC-wind,SB BOTANIC GARDEN,wind,cluster-sb-coast,
+38,10,0,RAWS-MONTECITO-temp,MONTECITO,temperature,cluster-sb-coast,0.3
+38,10,0,RAWS-MONTECITO-humidity,MONTECITO,humidity,cluster-sb-coast,0.5
+38,10,0,RAWS-MONTECITO-wind,MONTECITO,wind,cluster-sb-coast,
+33,25,0,RAWS-ROSE-VALLEY-temp,ROSE VALLEY,temperature,cluster-interior,0.3
+33,25,0,RAWS-ROSE-VALLEY-humidity,ROSE VALLEY,humidity,cluster-interior,0.5
+33,25,0,RAWS-ROSE-VALLEY-wind,ROSE VALLEY,wind,cluster-interior,
+39,10,0,RAWS-MONTECITO-2-temp,MONTECITO #2,temperature,cluster-sb-coast,0.3
+39,10,0,RAWS-MONTECITO-2-humidity,MONTECITO #2,humidity,cluster-sb-coast,0.5
+39,10,0,RAWS-MONTECITO-2-wind,MONTECITO #2,wind,cluster-sb-coast,
+39,14,0,RAWS-CARPINTERIA-temp,CARPINTERIA,temperature,cluster-sb-coast,0.3
+39,14,0,RAWS-CARPINTERIA-humidity,CARPINTERIA,humidity,cluster-sb-coast,0.5
+39,14,0,RAWS-CARPINTERIA-wind,CARPINTERIA,wind,cluster-sb-coast,
+32,40,0,RAWS-WHITAKER-PEAK-temp,WHITAKER PEAK,temperature,cluster-ventura-east,0.3
+32,40,0,RAWS-WHITAKER-PEAK-humidity,WHITAKER PEAK,humidity,cluster-ventura-east,0.5
+32,40,0,RAWS-WHITAKER-PEAK-wind,WHITAKER PEAK,wind,cluster-ventura-east,
+30,45,0,RAWS-WARM-SPRINGS-temp,WARM SPRINGS,temperature,cluster-ventura-east,0.3
+30,45,0,RAWS-WARM-SPRINGS-humidity,WARM SPRINGS,humidity,cluster-ventura-east,0.5
+30,45,0,RAWS-WARM-SPRINGS-wind,WARM SPRINGS,wind,cluster-ventura-east,
+40,18,0,RAWS-CASITAS-temp,CASITAS,temperature,cluster-sb-coast,0.3
+40,18,0,RAWS-CASITAS-humidity,CASITAS,humidity,cluster-sb-coast,0.5
+40,18,0,RAWS-CASITAS-wind,CASITAS,wind,cluster-sb-coast,
+37,39,0,RAWS-TEMESCAL-temp,TEMESCAL (LPF),temperature,cluster-ventura-east,0.3
+37,39,0,RAWS-TEMESCAL-humidity,TEMESCAL (LPF),humidity,cluster-ventura-east,0.5
+37,39,0,RAWS-TEMESCAL-wind,TEMESCAL (LPF),wind,cluster-ventura-east,
+40,42,0,RAWS-DEL-VALLE-temp,DEL VALLE,temperature,cluster-ventura-east,0.3
+40,42,0,RAWS-DEL-VALLE-humidity,DEL VALLE,humidity,cluster-ventura-east,0.5
+40,42,0,RAWS-DEL-VALLE-wind,DEL VALLE,wind,cluster-ventura-east,
+46,25,0,RAWS-HARMON-temp,HARMON,temperature,cluster-ventura-east,0.3
+46,25,0,RAWS-HARMON-humidity,HARMON,humidity,cluster-ventura-east,0.5
+46,25,0,RAWS-HARMON-wind,HARMON,wind,cluster-ventura-east,
+39,47,0,RAWS-SAUGUS-temp,SAUGUS,temperature,cluster-ventura-east,0.3
+39,47,0,RAWS-SAUGUS-humidity,SAUGUS,humidity,cluster-ventura-east,0.5
+39,47,0,RAWS-SAUGUS-wind,SAUGUS,wind,cluster-ventura-east,
+43,36,0,RAWS-WILEY-RIDGE-temp,WILEY RIDGE,temperature,cluster-ventura-east,0.3
+43,36,0,RAWS-WILEY-RIDGE-humidity,WILEY RIDGE,humidity,cluster-ventura-east,0.5
+43,36,0,RAWS-WILEY-RIDGE-wind,WILEY RIDGE,wind,cluster-ventura-east,
+45,47,0,RAWS-NEWHALL-PASS-temp,NEWHALL PASS,temperature,cluster-ventura-east,0.3
+45,47,0,RAWS-NEWHALL-PASS-humidity,NEWHALL PASS,humidity,cluster-ventura-east,0.5
+45,47,0,RAWS-NEWHALL-PASS-wind,NEWHALL PASS,wind,cluster-ventura-east,
+47,45,0,RAWS-PORTER-RANCH-temp,PORTER RANCH,temperature,cluster-ventura-east,0.3
+47,45,0,RAWS-PORTER-RANCH-humidity,PORTER RANCH,humidity,cluster-ventura-east,0.5
+47,45,0,RAWS-PORTER-RANCH-wind,PORTER RANCH,wind,cluster-ventura-east,

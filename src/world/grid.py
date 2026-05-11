@@ -1,5 +1,5 @@
 """
-ogar.world.grid
+world-simiulator.world.grid
 
 Canonical source for wildfire domain enums.
 
@@ -16,12 +16,14 @@ class TerrainType(StrEnum):
 
     Using str mixin so TerrainType.FOREST == "FOREST" for JSON/logging.
     """
-    FOREST    = "FOREST"
+
+    FOREST = "FOREST"
     GRASSLAND = "GRASSLAND"
-    SCRUB     = "SCRUB"
-    ROCK      = "ROCK"
-    WATER     = "WATER"
-    URBAN     = "URBAN"
+    SCRUB = "SCRUB"
+    ROCK = "ROCK"
+    WATER = "WATER"
+    URBAN = "URBAN"
+    SNOW = "SNOW"
 
 
 class FireState(StrEnum):
@@ -32,6 +34,7 @@ class FireState(StrEnum):
     BURNING  — actively on fire
     BURNED   — fire has passed through, fuel is exhausted
     """
+
     UNBURNED = "UNBURNED"
-    BURNING  = "BURNING"
-    BURNED   = "BURNED"
+    BURNING = "BURNING"
+    BURNED = "BURNED"

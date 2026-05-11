@@ -1,8 +1,8 @@
 """
-ogar.world.physics
+world-simiulator.world.physics
 
 Abstract base class for domain-specific physics modules and the
-StateEvent data class.
+StateEvent raw class.
 
 PhysicsModule
 ─────────────
@@ -51,6 +51,7 @@ C = TypeVar("C", bound=CellState)
 
 # ── StateEvent ───────────────────────────────────────────────────────────────
 
+
 @dataclass
 class StateEvent(Generic[C]):
     """
@@ -62,6 +63,7 @@ class StateEvent(Generic[C]):
     row, col, layer : which cell changed
     new_state       : the complete new CellState for that cell
     """
+
     row: int
     col: int
     new_state: C
@@ -70,12 +72,13 @@ class StateEvent(Generic[C]):
 
 # ── PhysicsModule ABC ────────────────────────────────────────────────────────
 
+
 class PhysicsModule(ABC, Generic[C]):
     """
     Abstract contract for domain physics.
 
     To implement a new domain:
-      1. Define a CellState subclass (your domain's cell data)
+      1. Define a CellState subclass (your domain's cell raw)
       2. Define an EnvironmentState subclass (ambient conditions)
       3. Subclass PhysicsModule[YourCellState]
       4. Implement initial_cell_state, tick_physics, summarize

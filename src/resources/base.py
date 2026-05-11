@@ -1,5 +1,5 @@
 """
-ogar.resources.base
+world-simiulator.resources.base
 
 Resource model — preparedness assets that exist on the world grid.
 
@@ -22,7 +22,7 @@ things that exist on the grid that help the agent answer:
 
 Design intent
 ─────────────
-ResourceBase is a Pydantic BaseModel, not an ABC.  Resources *are* data.
+ResourceBase is a Pydantic BaseModel, not an ABC.  Resources *are* raw.
 A firetruck and a hospital have the same interface — they differ in field
 values, not in behavior.  Domain-specific semantics (what "capacity"
 means) live in metadata and scenario setup.
@@ -62,12 +62,15 @@ import logging
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+from exceptions import ResourceError
 
 logger = logging.getLogger(__name__)
 
 
 # ── Resource status enum ─────────────────────────────────────────────────────
+
 
 class ResourceStatus(StrEnum):
     """
@@ -76,13 +79,15 @@ class ResourceStatus(StrEnum):
     Using str as the mixin means ResourceStatus.AVAILABLE == "AVAILABLE"
     is True, which simplifies logging and JSON serialisation.
     """
-    AVAILABLE       = "AVAILABLE"        # Ready to deploy
-    DEPLOYED        = "DEPLOYED"         # Currently in use at an incident
-    EN_ROUTE        = "EN_ROUTE"         # Moving to a new location (mobile only)
-    OUT_OF_SERVICE  = "OUT_OF_SERVICE"   # Broken, refueling, offline
+
+    AVAILABLE = "AVAILABLE"  # Ready to deploy
+    DEPLOYED = "DEPLOYED"  # Currently in use at an incident
+    EN_ROUTE = "EN_ROUTE"  # Moving to a new location (mobile only)
+    OUT_OF_SERVICE = "OUT_OF_SERVICE"  # Broken, refueling, offline
 
 
 # ── Resource base model ──────────────────────────────────────────────────────
+
 
 class ResourceBase(BaseModel):
     """
@@ -133,56 +138,57 @@ class ResourceBase(BaseModel):
     """
 
     # ── Identity ──────────────────────────────────────────────────────
-    resource_id: str = Field(
-        description="Stable unique identifier. e.g. 'firetruck-7'."
-    )
-    resource_type: str = Field(
-        description="Opaque type tag. e.g. 'firetruck', 'hospital'."
-    )
-    cluster_id: str = Field(
-        description="Routing key — which cluster this resource belongs to."
-    )
+    resource_id: str = Field(description="Stable unique identifier. e.g. 'firetruck-7'.")
+    resource_type: str = Field(description="Opaque type tag. e.g. 'firetruck', 'hospital'.")
+    cluster_id: str = Field(description="Routing key — which cluster this resource belongs to.")
 
     # ── Operational state ─────────────────────────────────────────────
     status: ResourceStatus = Field(
-        default=ResourceStatus.AVAILABLE,
-        description="Current operational state of the resource."
+        default=ResourceStatus.AVAILABLE, description="Current operational state of the resource."
     )
 
     # ── Location ──────────────────────────────────────────────────────
-    grid_row: int = Field(
-        description="Row position on the world grid."
-    )
-    grid_col: int = Field(
-        description="Column position on the world grid."
-    )
+    grid_row: int = Field(description="Row position on the world grid.")
+    grid_col: int = Field(description="Column position on the world grid.")
 
     # ── Capacity ──────────────────────────────────────────────────────
     capacity: float = Field(
-        default=1.0,
-        ge=0.0,
-        description="Maximum capability. Units are domain-specific."
+        default=1.0, ge=0.0, description="Maximum capability. Units are domain-specific."
     )
     available: float = Field(
-        default=1.0,
-        ge=0.0,
-        description="Current remaining capability. 0 ≤ available ≤ capacity."
+        default=1.0, ge=0.0, description="Current remaining capability. 0 ≤ available ≤ capacity."
     )
 
     # ── Mobility ──────────────────────────────────────────────────────
     mobile: bool = Field(
-        default=False,
-        description="Whether this resource can change grid position."
+        default=False, description="Whether this resource can change grid position."
     )
 
     # ── Domain extras ─────────────────────────────────────────────────
     metadata: dict[str, Any] = Field(
         default_factory=dict,
-        description="Domain-specific extras. e.g. {'unit': 'gallons', 'crew_size': 4}."
+        description="Domain-specific extras. e.g. {'unit': 'gallons', 'crew_size': 4}.",
     )
 
     # ── Pydantic config ──────────────────────────────────────────────
     model_config = {"use_enum_values": False}
+
+    # ── Invariants ───────────────────────────────────────────────────
+
+    @model_validator(mode="after")
+    def _check_available_within_capacity(self) -> ResourceBase:
+        """Reject construction with ``available > capacity``.
+
+        The per-field ``ge=0`` constraints stop negative values, but
+        Pydantic cannot compare two fields with field-level validators —
+        that requires ``model_validator(mode="after")``.
+        """
+        if self.available > self.capacity:
+            raise ResourceError(
+                f"Resource {self.resource_id!r}: available "
+                f"({self.available}) exceeds capacity ({self.capacity})"
+            )
+        return self
 
     # ── State transitions ────────────────────────────────────────────
 
@@ -197,10 +203,10 @@ class ResourceBase(BaseModel):
         For mobile resources, optionally update grid position.
         For fixed resources, row/col are ignored.
 
-        Raises ValueError if the resource is OUT_OF_SERVICE.
+        Raises ResourceError if the resource is OUT_OF_SERVICE.
         """
         if self.status == ResourceStatus.OUT_OF_SERVICE:
-            raise ValueError(
+            raise ResourceError(
                 f"Resource {self.resource_id!r} is OUT_OF_SERVICE and cannot be deployed"
             )
         self.status = ResourceStatus.DEPLOYED
@@ -209,7 +215,9 @@ class ResourceBase(BaseModel):
             self.grid_col = col
         logger.debug(
             "Resource %s deployed at (%d, %d)",
-            self.resource_id, self.grid_row, self.grid_col,
+            self.resource_id,
+            self.grid_row,
+            self.grid_col,
         )
 
     def send_en_route(
@@ -224,22 +232,22 @@ class ResourceBase(BaseModel):
         the position would update incrementally — here we set the
         destination immediately for simplicity.
 
-        Raises ValueError if the resource is not mobile or is OUT_OF_SERVICE.
+        Raises ResourceError if the resource is not mobile or is OUT_OF_SERVICE.
         """
         if not self.mobile:
-            raise ValueError(
+            raise ResourceError(
                 f"Resource {self.resource_id!r} is not mobile — cannot send en route"
             )
         if self.status == ResourceStatus.OUT_OF_SERVICE:
-            raise ValueError(
-                f"Resource {self.resource_id!r} is OUT_OF_SERVICE"
-            )
+            raise ResourceError(f"Resource {self.resource_id!r} is OUT_OF_SERVICE")
         self.status = ResourceStatus.EN_ROUTE
         self.grid_row = row
         self.grid_col = col
         logger.debug(
             "Resource %s en route to (%d, %d)",
-            self.resource_id, row, col,
+            self.resource_id,
+            row,
+            col,
         )
 
     def release(self) -> None:
@@ -272,7 +280,10 @@ class ResourceBase(BaseModel):
         self.available -= actual
         logger.debug(
             "Resource %s consumed %.1f (available: %.1f/%.1f)",
-            self.resource_id, actual, self.available, self.capacity,
+            self.resource_id,
+            actual,
+            self.available,
+            self.capacity,
         )
         return actual
 
@@ -290,7 +301,10 @@ class ResourceBase(BaseModel):
         self.available += actual
         logger.debug(
             "Resource %s restored %.1f (available: %.1f/%.1f)",
-            self.resource_id, actual, self.available, self.capacity,
+            self.resource_id,
+            actual,
+            self.available,
+            self.capacity,
         )
         return actual
 
