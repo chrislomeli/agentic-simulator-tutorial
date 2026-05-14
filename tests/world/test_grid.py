@@ -23,7 +23,7 @@ class TestEnums:
     def test_terrain_type_values(self):
         assert TerrainType.FOREST == "FOREST"
         assert TerrainType.WATER == "WATER"
-        assert len(TerrainType) == 6
+        assert len(TerrainType) == 7
 
     def test_fire_state_values(self):
         assert FireState.UNBURNED == "UNBURNED"

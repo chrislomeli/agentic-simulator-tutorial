@@ -86,11 +86,11 @@ class TestBasicWildfire:
 
     def test_use_rothermel_true(self):
         engine = create_basic_wildfire(use_rothermel=True)
-        assert isinstance(engine._physics, RothermelFirePhysicsModule)
+        assert isinstance(engine.physics, RothermelFirePhysicsModule)
 
     def test_use_rothermel_false(self):
         engine = create_basic_wildfire(use_rothermel=False)
-        assert isinstance(engine._physics, SimpleFirePhysicsModule)
+        assert isinstance(engine.physics, SimpleFirePhysicsModule)
 
     def test_rothermel_snapshot_has_fire_behavior(self):
         engine = create_basic_wildfire(use_rothermel=True)
@@ -142,8 +142,8 @@ class TestCreateFullWildfireScenario:
 
     def test_rothermel_engine_by_default(self):
         engine, _ = create_full_wildfire_scenario()
-        assert isinstance(engine._physics, RothermelFirePhysicsModule)
+        assert isinstance(engine.physics, RothermelFirePhysicsModule)
 
     def test_simple_physics_option(self):
         engine, _ = create_full_wildfire_scenario(use_rothermel=False)
-        assert isinstance(engine._physics, SimpleFirePhysicsModule)
+        assert isinstance(engine.physics, SimpleFirePhysicsModule)

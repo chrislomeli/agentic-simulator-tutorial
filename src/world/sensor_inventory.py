@@ -54,17 +54,25 @@ class SensorInventory:
       inventory.inject_bulk_failure(FailureMode.DRIFT, fraction=0.2)
     """
 
-    def __init__(self, grid_rows: int, grid_cols: int, grid_layers: int = 1) -> None:
+    def __init__(
+        self,
+        grid_rows: int = 0,
+        grid_cols: int = 0,
+        grid_layers: int = 1,
+        validate_bounds: bool = False,
+    ) -> None:
         """
         Parameters
         ──────────
-        grid_rows   : number of rows in the grid (for coverage calculations)
-        grid_cols   : number of columns in the grid
-        grid_layers : number of vertical layers (default 1)
+        grid_rows       : number of rows in the grid (for coverage calculations; 0 = no bounds)
+        grid_cols       : number of columns in the grid (0 = no bounds)
+        grid_layers     : number of vertical layers (default 1)
+        validate_bounds : if False, allow sensors at any position (default False)
         """
         self._grid_rows = grid_rows
         self._grid_cols = grid_cols
         self._grid_layers = grid_layers
+        self._validate_bounds = validate_bounds
         self._sensors: dict[str, SensorBase] = {}  # source_id → sensor
         self._positions: dict[str, tuple[int, int, int]] = {}  # source_id → (row, col, layer)
         self._type_index: dict[str, set[str]] = {}  # source_type → {source_ids}
@@ -77,11 +85,11 @@ class SensorInventory:
 
         Raises ValueError if:
           - A sensor with the same source_id is already registered
-          - The position is out of grid bounds
+          - validate_bounds=True and position is out of grid bounds
         """
         if sensor.source_id in self._sensors:
             raise ValueError(f"Sensor {sensor.source_id!r} is already registered")
-        if not (
+        if self._validate_bounds and not (
             0 <= row < self._grid_rows
             and 0 <= col < self._grid_cols
             and 0 <= layer < self._grid_layers

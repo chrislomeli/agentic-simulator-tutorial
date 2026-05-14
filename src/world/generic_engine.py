@@ -129,7 +129,7 @@ class GenericWorldEngine(Generic[C]):
         """
         self.grid = grid
         self.environment = environment
-        self._physics = physics
+        self.physics = physics
 
         # Current simulation tick.  Starts at 0, incremented after each tick().
         self._tick: int = 0
@@ -159,7 +159,7 @@ class GenericWorldEngine(Generic[C]):
         self.environment.tick()
 
         # ── 2. Compute state changes ─────────────────────────────
-        state_events: list[StateEvent[C]] = self._physics.tick_physics(
+        state_events: list[StateEvent[C]] = self.physics.tick_physics(
             grid=self.grid,
             environment=self.environment,
             tick=self._tick,
@@ -170,7 +170,7 @@ class GenericWorldEngine(Generic[C]):
             self.grid.update_cell_state(event.row, event.col, event.new_state, event.layer)
 
         # ── 4. Record ground truth ───────────────────────────────
-        domain_summary = self._physics.summarize(self.grid)
+        domain_summary = self.physics.summarize(self.grid)
         grid_summary = self.grid.summary_counts()
 
         snapshot = GenericGroundTruthSnapshot(
