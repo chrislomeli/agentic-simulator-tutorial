@@ -22,7 +22,7 @@ things that exist on the grid that help the agent answer:
 
 Design intent
 ─────────────
-ResourceBase is a Pydantic BaseModel, not an ABC.  Resources *are* raw.
+ResourceBase is a Pydantic BaseModel, not an ABC.  Resources *are* data.
 A firetruck and a hospital have the same interface — they differ in field
 values, not in behavior.  Domain-specific semantics (what "capacity"
 means) live in metadata and scenario setup.

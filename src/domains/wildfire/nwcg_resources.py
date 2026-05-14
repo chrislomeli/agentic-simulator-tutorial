@@ -4,7 +4,7 @@ world-simiulator.domains.wildfire.nwcg_resources
 NWCG (National Wildfire Coordinating Group) standard resource catalog and
 fireline intensity thresholds for resource typing.
 
-This formalises the raw raw from docs/tutorial/wildfires/resources.py into
+This formalises the raw data from docs/tutorial/wildfires/resources.py into
 typed dataclasses that the resource-sizing tools can query programmatically.
 
 NWCG resource typing uses integer type numbers where 1 = heaviest/most capable

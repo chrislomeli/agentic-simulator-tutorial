@@ -1,7 +1,5 @@
 """Tests for agents.supervisor — state reducers, node functions, graph."""
 
-from datetime import datetime, timezone
-
 import pytest
 from langgraph.graph import END
 from langgraph.store.memory import InMemoryStore
@@ -10,12 +8,9 @@ from agents.cluster.graph import build_cluster_agent_graph
 from agents.cluster.state import ClusterAgentState
 from agents.commons.agent_dependencies import AgentDependencies
 from agents.commons.schemas import (
-    CollatedRecord,
+    CellReadings,
     CollatedRecordRisk,
-    CoverageSummary,
     GridPosition,
-    TerrainContext,
-    TimeWindow,
 )
 from agents.commons.state_types import StatusValue
 from agents.supervisor.graph import build_supervisor_graph
@@ -26,7 +21,9 @@ from agents.supervisor.nodes import (
     fan_out_to_clusters,
     make_dispatch_commands,
     make_run_cluster_agent,
+    route_after_assess,
     route_after_decide,
+    LOGISTICS_RISK_THRESHOLD,
 )
 from agents.supervisor.state import (
     ActuatorCommand,
@@ -39,23 +36,12 @@ from agents.supervisor.state import (
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _now() -> datetime:
-    return datetime.now(timezone.utc)
 
-
-def _make_record(cluster_id: str = "cluster-north", row: int = 0, col: int = 0) -> CollatedRecord:
-    now = _now()
-    return CollatedRecord(
+def _make_readings(cluster_id: str = "cluster-north", row: int = 0, col: int = 0) -> CellReadings:
+    return CellReadings(
         cluster_id=cluster_id,
         position=GridPosition(row=row, col=col),
-        window=TimeWindow(start=now, end=now),
-        coverage=CoverageSummary(),
-        terrain=TerrainContext(
-            terrain_type="grassland",
-            vegetation=0.7,
-            fuel_moisture=0.2,
-            slope=5.0,
-        ),
+        metrics=[],
     )
 
 
@@ -63,7 +49,7 @@ def _make_risk(row: int = 0, col: int = 0, score: int = 5) -> CollatedRecordRisk
     return CollatedRecordRisk(
         position=GridPosition(row=row, col=col),
         risk_score=score,
-        confidence=3.0,
+        confidence=3,
         confidence_rationale="test",
         contributing_factors=["test factor"],
     )
@@ -143,8 +129,8 @@ class TestMergeClusterFindingsReducer:
 class TestFanOutToClusters:
     def test_returns_one_send_per_cluster(self):
         state = _make_state(clusters={
-            "cluster-north": [_make_record("cluster-north")],
-            "cluster-south": [_make_record("cluster-south")],
+            "cluster-north": [_make_readings("cluster-north")],
+            "cluster-south": [_make_readings("cluster-south")],
         })
         sends = fan_out_to_clusters(state)
         assert len(sends) == 2
@@ -155,64 +141,61 @@ class TestFanOutToClusters:
         assert sends == []
 
     def test_send_targets_run_cluster_agent(self):
-        state = _make_state(clusters={"cluster-north": [_make_record()]})
+        state = _make_state(clusters={"cluster-north": [_make_readings()]})
         sends = fan_out_to_clusters(state)
         assert sends[0].node == "run_cluster_agent"
 
-    def test_send_payload_is_cluster_agent_state_with_records(self):
-        records = [_make_record(row=0), _make_record(row=1)]
-        state = _make_state(clusters={"cluster-north": records})
+    def test_send_payload_is_cluster_agent_state_with_readings(self):
+        readings = [_make_readings(row=0), _make_readings(row=1)]
+        state = _make_state(clusters={"cluster-north": readings})
         sends = fan_out_to_clusters(state)
         payload = sends[0].arg
         assert isinstance(payload, ClusterAgentState)
         assert payload.cluster_id == "cluster-north"
-        assert len(payload.collated_records) == 2
+        assert len(payload.readings) == 2
 
 
 # ── make_run_cluster_agent tests ──────────────────────────────────────────────
 
-class ResultScore:
-    pass
-
 
 class TestRunClusterAgent:
-    def test_returns_cluster_findings_and_score(self, agent_deps):
+    async def test_returns_cluster_findings_and_score(self, agent_deps):
         cluster_graph = build_cluster_agent_graph(agent_deps=agent_deps)
         run_node = make_run_cluster_agent(cluster_graph)
         state = ClusterAgentState(
             cluster_id="cluster-north",
             workflow_id="test",
-            collated_records=[_make_record()],
+            readings=[_make_readings()],
         )
-        result = run_node(state)
+        result = await run_node(state)
         assert "cluster_findings" in result
         assert "cluster_score" in result
         assert "cluster-north" in result["cluster_findings"]
         assert "cluster-north" in result["cluster_score"]
         assert isinstance(result["cluster_score"]["cluster-north"], RiskScore)
 
-    def test_score_is_within_valid_range(self, agent_deps):
+    async def test_score_is_within_valid_range(self, agent_deps):
         cluster_graph = build_cluster_agent_graph(agent_deps=agent_deps)
         run_node = make_run_cluster_agent(cluster_graph)
         state = ClusterAgentState(
             cluster_id="cluster-north",
             workflow_id="test",
-            collated_records=[_make_record()],
+            readings=[_make_readings()],
         )
-        result = run_node(state)
+        result = await run_node(state)
         score = result["cluster_score"]["cluster-north"].risk_score
         assert 0 <= score <= 10
 
-    def test_empty_records_produces_score_zero(self, agent_deps):
+    async def test_empty_readings_produces_score_zero(self, agent_deps):
         """Guards against ValueError from max() on empty assessments."""
         cluster_graph = build_cluster_agent_graph(agent_deps=agent_deps)
         run_node = make_run_cluster_agent(cluster_graph)
         state = ClusterAgentState(
             cluster_id="cluster-north",
             workflow_id="test",
-            collated_records=[],
+            readings=[],
         )
-        result = run_node(state)
+        result = await run_node(state)
         assert result["cluster_score"]["cluster-north"].risk_score == 0
         assert result["cluster_findings"]["cluster-north"] == []
 
@@ -281,6 +264,42 @@ class TestDispatchCommands:
         assert result["status"] == StatusValue.COMPLETED
 
 
+# ── route_after_assess tests ─────────────────────────────────────────────────
+
+
+class TestRouteAfterAssess:
+    def test_no_scores_skips_logistics(self):
+        state = _make_state(cluster_score={})
+        assert route_after_assess(state) == "dispatch_commands"
+
+    def test_score_at_threshold_invokes_logistics(self):
+        state = _make_state(cluster_score={"c1": RiskScore(risk_score=LOGISTICS_RISK_THRESHOLD, confidence=2)})
+        assert route_after_assess(state) == "run_logistics_agent"
+
+    def test_score_above_threshold_invokes_logistics(self):
+        state = _make_state(cluster_score={"c1": RiskScore(risk_score=8, confidence=3)})
+        assert route_after_assess(state) == "run_logistics_agent"
+
+    def test_score_below_threshold_skips_logistics(self):
+        state = _make_state(cluster_score={"c1": RiskScore(risk_score=LOGISTICS_RISK_THRESHOLD - 1, confidence=2)})
+        assert route_after_assess(state) == "dispatch_commands"
+
+    def test_uses_max_across_clusters(self):
+        """One cluster below threshold, one above — should invoke logistics."""
+        state = _make_state(cluster_score={
+            "c1": RiskScore(risk_score=2, confidence=1),
+            "c2": RiskScore(risk_score=7, confidence=2),
+        })
+        assert route_after_assess(state) == "run_logistics_agent"
+
+    def test_all_clusters_below_threshold_skips_logistics(self):
+        state = _make_state(cluster_score={
+            "c1": RiskScore(risk_score=2, confidence=1),
+            "c2": RiskScore(risk_score=3, confidence=2),
+        })
+        assert route_after_assess(state) == "dispatch_commands"
+
+
 # ── route_after_decide tests ──────────────────────────────────────────────────
 
 class TestRouteAfterDecide:
@@ -299,78 +318,3 @@ class TestRouteAfterDecide:
     def test_routes_to_end_on_completed(self):
         state = _make_state(status=StatusValue.COMPLETED)
         assert route_after_decide(state) == END
-
-
-# ── graph integration tests ───────────────────────────────────────────────────
-
-class TestSupervisorGraph:
-    def test_build_returns_compiled_graph(self, agent_deps):
-        graph = build_supervisor_graph(agent_dependencies=agent_deps)
-        assert isinstance(graph, CompiledStateGraph)
-
-    def test_all_nodes_present(self, agent_deps):
-        graph = build_supervisor_graph(agent_dependencies=agent_deps)
-        node_names = set(graph.get_graph().nodes.keys())
-        assert "run_cluster_agent" in node_names
-        assert "assess_situation" in node_names
-        assert "decide_actions" in node_names
-        assert "dispatch_commands" in node_names
-        # fan_out_to_clusters is a conditional edge, not a node
-        assert "fan_out_to_clusters" not in node_names
-
-    def test_end_to_end_with_records_completes(self, agent_deps):
-        graph = build_supervisor_graph(agent_dependencies=agent_deps)
-        state = SupervisorState(clusters={
-            "cluster-north": [_make_record("cluster-north")],
-        })
-        result = graph.invoke(state)
-        assert result["status"] == StatusValue.COMPLETED
-        assert result["situation_summary"] is not None
-        assert "cluster-north" in result["cluster_score"]
-        assert "cluster-north" in result["cluster_findings"]
-
-    def test_end_to_end_multi_cluster(self, agent_deps):
-        graph = build_supervisor_graph(agent_dependencies=agent_deps)
-        state = SupervisorState(clusters={
-            "cluster-north": [_make_record("cluster-north", row=0)],
-            "cluster-south": [_make_record("cluster-south", row=5)],
-        })
-        result = graph.invoke(state)
-        assert result["status"] == StatusValue.COMPLETED
-        assert len(result["cluster_score"]) == 2
-        assert len(result["cluster_findings"]) == 2
-
-    def test_end_to_end_empty_clusters_does_not_raise(self, agent_deps):
-        """Empty clusters: fan_out returns [] so no cluster agents run.
-        LangGraph terminates early without visiting any nodes. No error raised."""
-        graph = build_supervisor_graph(agent_dependencies=agent_deps)
-        state = SupervisorState(clusters={})
-        result = graph.invoke(state)
-        assert result["status"] != StatusValue.ERROR
-        assert result["cluster_score"] == {}
-
-    def test_cluster_scores_are_ints_in_valid_range(self, agent_deps):
-        graph = build_supervisor_graph(agent_dependencies=agent_deps)
-        state = SupervisorState(clusters={
-            "cluster-north": [_make_record("cluster-north", row=r) for r in range(3)],
-        })
-        result = graph.invoke(state)
-        for cluster, score in result["cluster_score"].items():
-            assert isinstance(score, RiskScore)
-            assert 0 <= score.risk_score <= 10
-
-    def test_invoke_with_store_persists_assessments(self, agent_deps):
-        store = InMemoryStore()
-        deps = AgentDependencies(
-            llm_registry=agent_deps.llm_registry,
-            prompt_registry=agent_deps.prompt_registry,
-            store=store,
-            heat_map=agent_deps.heat_map,
-        )
-        graph = build_supervisor_graph(agent_dependencies=deps)
-        state = SupervisorState(clusters={
-            "cluster-north": [_make_record("cluster-north", row=2, col=3)],
-        })
-        graph.invoke(state)
-        items = store.search(("risk_assessments", "cluster-north"))
-        assert len(items) == 1

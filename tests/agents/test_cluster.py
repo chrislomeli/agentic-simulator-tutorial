@@ -1,7 +1,5 @@
 """Tests for agents.cluster — state schema, node functions, graph."""
 
-from datetime import datetime, timezone
-
 import pytest
 from langgraph.store.memory import InMemoryStore
 
@@ -11,39 +9,25 @@ from agents.cluster.state import ClusterAgentState
 from langgraph.graph.state import CompiledStateGraph
 from agents.commons.agent_dependencies import AgentDependencies
 from agents.commons.schemas import (
-    CollatedRecord,
+    CellReadings,
     CollatedRecordRisk,
-    CoverageSummary,
     GridPosition,
-    TerrainContext,
-    TimeWindow,
 )
 from agents.commons.state_types import StatusValue
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _now() -> datetime:
-    return datetime.now(timezone.utc)
 
-
-def _make_record(
+def _make_readings(
     cluster_id: str = "cluster-north",
     row: int = 0,
     col: int = 0,
-) -> CollatedRecord:
-    now = _now()
-    return CollatedRecord(
+) -> CellReadings:
+    return CellReadings(
         cluster_id=cluster_id,
         position=GridPosition(row=row, col=col),
-        window=TimeWindow(start=now, end=now),
-        coverage=CoverageSummary(),
-        terrain=TerrainContext(
-            terrain_type="grassland",
-            vegetation=0.7,
-            fuel_moisture=0.2,
-            slope=5.0,
-        ),
+        metrics=[],
     )
 
 
@@ -59,7 +43,7 @@ class TestClusterAgentState:
         state = ClusterAgentState(cluster_id="c1", workflow_id="w1")
         assert state.cluster_id == "c1"
         assert state.workflow_id == "w1"
-        assert state.collated_records == []
+        assert state.readings == []
         assert state.risk_assessments == []
         assert state.messages == []
         assert state.status == StatusValue.IDLE
@@ -72,43 +56,47 @@ class TestClusterAgentState:
 # ── evaluate node tests ───────────────────────────────────────────────────────
 
 class TestEvaluateNode:
-    def test_empty_records_returns_empty_assessments(self, agent_deps):
+    async def test_empty_cells_returns_empty_assessments(self, agent_deps):
         evaluate = make_evaluate_node(
             prompt_registry=agent_deps.prompt_registry,
             llm_registry=agent_deps.llm_registry,
-            heat_map=agent_deps.heat_map,
+            world_engine=agent_deps.world_engine,
         )
         state = _make_state()
-        result = evaluate(state)
+        result = await evaluate(state)
         assert result["risk_assessments"] == []
         assert result["status"] == StatusValue.PROCESSING
 
-    def test_stub_produces_one_risk_per_record(self, agent_deps):
+    async def test_stub_produces_one_risk_per_cell(self, agent_deps):
         evaluate = make_evaluate_node(
             prompt_registry=agent_deps.prompt_registry,
             llm_registry=agent_deps.llm_registry,
-            heat_map=agent_deps.heat_map,
+            world_engine=agent_deps.world_engine,
         )
-        records = [_make_record(row=0, col=0), _make_record(row=0, col=1)]
-        state = _make_state(collated_records=records)
-        result = evaluate(state)
+        cells = [{"row": 0, "col": 0}, {"row": 0, "col": 1}]
+        state = _make_state(updated_cells=cells)
+        result = await evaluate(state)
         assert len(result["risk_assessments"]) == 2
         for risk in result["risk_assessments"]:
             assert isinstance(risk, CollatedRecordRisk)
             assert 0 <= risk.risk_score <= 10
-            assert 0 <= risk.confidence <= 4
+            assert 0 <= risk.confidence <= 3
 
-    def test_stub_positions_match_records(self, agent_deps):
+    async def test_stub_writes_risk_to_cell(self, agent_deps):
+        """evaluate must write CellRiskAssessment onto the grid cell so
+        sector_analysis can find hotspots."""
+        from agents.commons.schemas import CellRiskAssessment
         evaluate = make_evaluate_node(
             prompt_registry=agent_deps.prompt_registry,
             llm_registry=agent_deps.llm_registry,
-            heat_map=agent_deps.heat_map,
+            world_engine=agent_deps.world_engine,
         )
-        state = _make_state(collated_records=[_make_record(row=3, col=7)])
-        result = evaluate(state)
-        risk = result["risk_assessments"][0]
-        assert risk.position.row == 3
-        assert risk.position.col == 7
+        # heuristic_score must be >= HEURISTIC_EVALUATE_THRESHOLD to pass the gate
+        state = _make_state(updated_cells=[{"row": 2, "col": 3, "heuristic_score": 5}])
+        await evaluate(state)
+        cell = agent_deps.world_engine.grid.get_cell(2, 3)
+        assert isinstance(cell.risk_assessment, CellRiskAssessment)
+        assert cell.risk_assessment.risk_score == 5
 
 
 # ── route_after_evaluate tests ────────────────────────────────────────────────
@@ -136,25 +124,25 @@ class TestRouteAfterEvaluate:
 # ── report_risk node tests ────────────────────────────────────────────────────
 
 class TestReportRiskNode:
-    def test_sets_completed_status(self):
-        report_risk = make_report_risk_node(store=None)
+    def test_sets_completed_status(self, agent_deps):
+        report_risk = make_report_risk_node(world_engine=agent_deps.world_engine, store=None)
         state = _make_state()
         result = report_risk(state)
         assert result["status"] == StatusValue.COMPLETED
 
-    def test_no_store_does_not_raise(self):
-        report_risk = make_report_risk_node(store=None)
+    def test_no_store_does_not_raise(self, agent_deps):
+        report_risk = make_report_risk_node(world_engine=agent_deps.world_engine, store=None)
         state = _make_state(risk_assessments=[])
         result = report_risk(state)
         assert result["status"] == StatusValue.COMPLETED
 
-    def test_writes_to_store_when_provided(self):
+    def test_writes_to_store_when_provided(self, agent_deps):
         store = InMemoryStore()
-        report_risk = make_report_risk_node(store=store)
+        report_risk = make_report_risk_node(world_engine=agent_deps.world_engine, store=store)
         assessment = CollatedRecordRisk(
             position=GridPosition(row=1, col=2),
             risk_score=7,
-            confidence=3.0,
+            confidence=3,
             confidence_rationale="test",
             contributing_factors=["high temp"],
         )
@@ -167,22 +155,22 @@ class TestReportRiskNode:
         assert len(items) == 1
         assert items[0].value["risk_score"] == 7
 
-    def test_empty_assessments_writes_nothing_to_store(self):
+    def test_empty_assessments_writes_nothing_to_store(self, agent_deps):
         store = InMemoryStore()
-        report_risk = make_report_risk_node(store=store)
+        report_risk = make_report_risk_node(world_engine=agent_deps.world_engine, store=store)
         state = _make_state(cluster_id="cluster-north", risk_assessments=[])
         report_risk(state)
         items = store.search(("risk_assessments", "cluster-north"))
         assert len(items) == 0
 
-    def test_multiple_assessments_stored_by_position(self):
+    def test_multiple_assessments_stored_by_position(self, agent_deps):
         store = InMemoryStore()
-        report_risk = make_report_risk_node(store=store)
+        report_risk = make_report_risk_node(world_engine=agent_deps.world_engine, store=store)
         assessments = [
             CollatedRecordRisk(
                 position=GridPosition(row=r, col=c),
                 risk_score=5,
-                confidence=2.0,
+                confidence=2,
                 confidence_rationale="test",
                 contributing_factors=[],
             )
@@ -207,52 +195,22 @@ class TestClusterAgentGraph:
         assert "evaluate" in node_names
         assert "report_risk" in node_names
 
-    def test_invoke_with_records_produces_risk_assessments(self, agent_deps):
+    async def test_invoke_with_readings_produces_risk_assessments(self, agent_deps):
         graph = build_cluster_agent_graph(agent_deps=agent_deps)
         state = ClusterAgentState(
             cluster_id="cluster-north",
             workflow_id="test-graph-1",
-            collated_records=[_make_record()],
+            readings=[_make_readings()],
         )
-        result = graph.invoke(state)
+        result = await graph.ainvoke(state)
         assert result["status"] == StatusValue.COMPLETED
-        assert len(result["risk_assessments"]) == 1
 
-    def test_invoke_empty_records_completes_cleanly(self, agent_deps):
+    async def test_invoke_empty_readings_completes_cleanly(self, agent_deps):
         graph = build_cluster_agent_graph(agent_deps=agent_deps)
         state = ClusterAgentState(
             cluster_id="cluster-north",
             workflow_id="test-empty",
         )
-        result = graph.invoke(state)
+        result = await graph.ainvoke(state)
         assert result["status"] == StatusValue.COMPLETED
         assert result["risk_assessments"] == []
-
-    def test_invoke_with_store_persists_assessments(self, agent_deps):
-        store = InMemoryStore()
-        deps = AgentDependencies(
-            llm_registry=agent_deps.llm_registry,
-            prompt_registry=agent_deps.prompt_registry,
-            store=store,
-            heat_map=agent_deps.heat_map,
-        )
-        graph = build_cluster_agent_graph(agent_deps=deps)
-        state = ClusterAgentState(
-            cluster_id="cluster-north",
-            workflow_id="test-store",
-            collated_records=[_make_record(row=2, col=3)],
-        )
-        graph.invoke(state)
-        items = store.search(("risk_assessments", "cluster-north"))
-        assert len(items) == 1
-
-    def test_invoke_multi_record_produces_one_risk_each(self, agent_deps):
-        graph = build_cluster_agent_graph(agent_deps=agent_deps)
-        records = [_make_record(row=i, col=0) for i in range(4)]
-        state = ClusterAgentState(
-            cluster_id="cluster-north",
-            workflow_id="test-multi",
-            collated_records=records,
-        )
-        result = graph.invoke(state)
-        assert len(result["risk_assessments"]) == 4

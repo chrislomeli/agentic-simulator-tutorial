@@ -2,7 +2,7 @@
 world-simiulator.world.physics
 
 Abstract base class for domain-specific physics modules and the
-StateEvent raw class.
+StateEvent data class.
 
 PhysicsModule
 ─────────────
@@ -78,7 +78,7 @@ class PhysicsModule(ABC, Generic[C]):
     Abstract contract for domain physics.
 
     To implement a new domain:
-      1. Define a CellState subclass (your domain's cell raw)
+      1. Define a CellState subclass (your domain's cell data)
       2. Define an EnvironmentState subclass (ambient conditions)
       3. Subclass PhysicsModule[YourCellState]
       4. Implement initial_cell_state, tick_physics, summarize

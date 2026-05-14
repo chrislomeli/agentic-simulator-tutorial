@@ -5,10 +5,11 @@ This package owns the long-running components that turn a loaded
 world into a stream of LLM evaluations:
 
   * SensorPublisher  — ticks the engine and samples sensors.
-  * CellStateManager — collates per-cell state, emits CollatedRecords
-                       when thresholds are crossed.
+  * CellStateManager — tracks per-cell state, emits triggered
+                       positions when evaluation thresholds are crossed.
   * RuntimeOrchestrator — wires the two together and dispatches
-                          micro-batches into the cluster graph.
+                          micro-batches (CellReadings) into the supervisor
+                          graph.
 
 The orchestrator is *not* a graph node; it sits outside the graph,
 treating compiled graphs as pure-compute callables. This keeps the

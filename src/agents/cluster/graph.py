@@ -27,7 +27,7 @@ from langgraph.graph import END, START, StateGraph
 from agents.cluster.nodes import (
     make_evaluate_node,
     make_report_risk_node,
-    route_after_evaluate,
+    route_after_evaluate, make_update_world_state,
 )
 from agents.cluster.state import ClusterAgentState, StreamingRiskGraph
 from agents.commons.agent_dependencies import AgentDependencies
@@ -63,20 +63,30 @@ def build_cluster_agent_graph(
         store to persist RiskAssessment records.
     """
     builder = StateGraph(ClusterAgentState)
+
+    builder.add_node(
+        "update_world",
+        make_update_world_state(
+            world_engine=agent_deps.world_engine,
+            cell_state_manager=agent_deps.cell_state_manager,
+        ),
+    )
+
     builder.add_node(
         "evaluate",
         make_evaluate_node(
             prompt_registry=agent_deps.prompt_registry,
             llm_registry=agent_deps.llm_registry,
-            heat_map=agent_deps.heat_map,
+            world_engine=agent_deps.world_engine,
         ),
     )
     builder.add_node(
         "report_risk",
-        make_report_risk_node(store=agent_deps.store),
+        make_report_risk_node(world_engine=agent_deps.world_engine, store=agent_deps.store),
     )
 
-    builder.add_edge(START, "evaluate")
+    builder.add_edge(START, "update_world")
+    builder.add_edge("update_world", "evaluate")
     builder.add_conditional_edges("evaluate", route_after_evaluate)
     builder.add_edge("report_risk", END)
 

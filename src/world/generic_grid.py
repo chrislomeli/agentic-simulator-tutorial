@@ -78,7 +78,6 @@ class GenericTerrainGrid(Generic[C]):
             raise ValueError(f"Grid dimensions must be positive, got ({rows}, {cols}, {layers})")
         self.rows = rows
         self.cols = cols
-        self.layers = layers
         self._cells: list[list[list[GenericCell[C]]]] = [
             [
                 [
@@ -94,6 +93,7 @@ class GenericTerrainGrid(Generic[C]):
             ]
             for r in range(rows)
         ]
+        self.layers = layers
 
     def get_cell(self, row: int, col: int, layer: int = 0) -> GenericCell[C]:
         """

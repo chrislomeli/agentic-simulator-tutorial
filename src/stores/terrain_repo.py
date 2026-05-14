@@ -70,7 +70,12 @@ class TerrainRepository:
                 lat,
                 long,
                 location,
-                region
+                region,
+                temperature_c,
+                humidity_pct,
+                wind_speed_mps,
+                wind_direction_deg,
+                pressure_hpa
             from terrain
             where region = %s
             order by grid_row, grid_column, layer
@@ -107,10 +112,22 @@ class TerrainRepository:
         )
         return terrain_dict, config
 
+    def fetch_cell_location(self, row: int, col: int, layer: int = 0) -> tuple[float, float] | None:
+        """Return (lat, long) for a single grid cell, or None if not found."""
+        rows = self._pg.fetch_rows(
+            "select lat, long from terrain where grid_row = %s and grid_column = %s and layer = %s limit 1",
+            (row, col, layer),
+        )
+        if not rows:
+            return None
+        r = rows[0]
+        return r["lat"], r["long"]
+
     def build_fire_cell_state(self, terrain: Terrain) -> FireCellState:
         """Convert a Terrain record to FireCellState.
 
         Uses sensible defaults for missing fields.
+        Includes per-cell weather seed if available in the DB.
         """
         terrain_type = _TERRAIN_MAP.get(terrain.terrain or "FOREST", TerrainType.FOREST)
 
@@ -119,4 +136,10 @@ class TerrainRepository:
             vegetation=terrain.vegetation if terrain.vegetation is not None else 0.8,
             fuel_moisture=terrain.fuel_moisture if terrain.fuel_moisture is not None else 0.3,
             slope=terrain.slope if terrain.slope is not None else 0.0,
+            # Per-cell weather seed (defaults used if DB columns are NULL)
+            temperature_c=terrain.temperature_c if terrain.temperature_c is not None else 30.0,
+            humidity_pct=terrain.humidity_pct if terrain.humidity_pct is not None else 25.0,
+            wind_speed_mps=terrain.wind_speed_mps if terrain.wind_speed_mps is not None else 5.0,
+            wind_direction_deg=terrain.wind_direction_deg if terrain.wind_direction_deg is not None else 0.0,
+            pressure_hpa=terrain.pressure_hpa if terrain.pressure_hpa is not None else 1013.0,
         )

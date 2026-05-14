@@ -33,6 +33,7 @@ Node responsibilities
 
 from __future__ import annotations
 
+import operator
 import uuid
 from typing import Annotated, NewType
 
@@ -41,7 +42,7 @@ from langgraph.graph.message import add_messages
 from langgraph.graph.state import CompiledStateGraph
 from pydantic import Field
 
-from agents.commons.schemas import CollatedRecord, CollatedRecordRisk, TracedState
+from agents.commons.schemas import CellReadings, CollatedRecordRisk, TracedState
 
 # ── Typed graph ────────────────────────────────────────────────────
 StreamingRiskGraph = NewType("StreamingRiskGraph", CompiledStateGraph)
@@ -69,8 +70,11 @@ class ClusterAgentState(TracedState):
     messages: Annotated[list[BaseMessage], add_messages] = Field(default_factory=list)
 
     # ── Risk pipeline fields ──────────────────────────────────────────
-    # Orchestrator pre-populates collated_records before invoking the graph.
-    # evaluate node reads collated_records and writes risk_assessments.
-    # report_risk node reads risk_assessments and persists them.
-    collated_records: list[CollatedRecord] = Field(default_factory=list)
+    # Supervisor pre-populates ``readings`` before invoking the subgraph.
+    # update_world reads ``readings``, writes metric values onto the world
+    # grid, and emits ``updated_cells`` (list of cell snapshot dicts).
+    # evaluate reads ``updated_cells`` and writes ``risk_assessments``.
+    # report_risk reads ``risk_assessments`` and persists them.
+    readings: list[CellReadings] = Field(default_factory=list)
+    updated_cells: list[dict] = Field(default_factory=list)
     risk_assessments: list[CollatedRecordRisk] = Field(default_factory=list)

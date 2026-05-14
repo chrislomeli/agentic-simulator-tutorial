@@ -2,12 +2,12 @@
 
 import pytest
 
-from agents.commons import RiskAssessment, CollatedRecord
+from agents.commons import RiskAssessment, CellReadings
 from agents.commons.agent_dependencies import AgentDependencies
 from agents.commons.llm_registry import LLMRegistry
 from prompts import PromptRegistry
-from world.risk_heat_map import RiskHeatMap
 import agents.cluster.nodes as cluster_nodes
+
 
 @pytest.fixture(autouse=True)
 def stub_evaluate():
@@ -19,7 +19,7 @@ def stub_evaluate():
 
 
 @pytest.fixture
-def agent_deps() -> AgentDependencies:
+def agent_deps(engine) -> AgentDependencies:
     """Lightweight AgentDependencies for stub-mode tests.
 
     The evaluate node is gated behind STUB_RISK_SCORE=True, so neither
@@ -27,12 +27,10 @@ def agent_deps() -> AgentDependencies:
     Both are constructed with minimal config — no API credentials needed.
     """
     registry = PromptRegistry()
-    registry.register_models(RiskAssessment, CollatedRecord)
-    # Create minimal heat map for stub testing
-    heat_map = RiskHeatMap(rows=10, cols=10, layers=1)
+    registry.register_models(RiskAssessment, CellReadings)
     return AgentDependencies(
         llm_registry=LLMRegistry({"classifier": None}),
         prompt_registry=registry,
         store=None,
-        heat_map=heat_map,
+        world_engine=engine,
     )

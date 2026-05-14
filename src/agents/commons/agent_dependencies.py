@@ -5,8 +5,6 @@ Dependency injection container for agent graphs.
 
 Lives in its own module so that domain schemas (``schemas.py``) and node
 infrastructure (``node_types.py``) remain free of heavy framework imports.
-``AgentDependencies`` is the only class here because it is the only type
-that needs ``LLMRegistry``, ``PromptRegistry``, and ``BaseStore`` all at once.
 """
 
 from __future__ import annotations
@@ -16,9 +14,9 @@ from pydantic import BaseModel
 
 from agents.commons.llm_registry import LLMRegistry
 from prompts import PromptRegistry
-
-# Imported at runtime for Pydantic model validation
-from world.risk_heat_map import RiskHeatMap
+from stores.pg_gateway import PgGateway
+from world import GenericWorldEngine
+from world.cell_state_manager import CellStateManager
 
 
 class AgentDependencies(BaseModel):
@@ -26,5 +24,7 @@ class AgentDependencies(BaseModel):
 
     llm_registry: LLMRegistry | None
     prompt_registry: PromptRegistry
+    pg_gateway: PgGateway | None = None
+    world_engine: GenericWorldEngine | None
+    cell_state_manager: CellStateManager | None = None
     store: BaseStore | None = None
-    heat_map: RiskHeatMap | None = None  # Shared risk layer for supervisor queries

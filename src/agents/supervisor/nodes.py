@@ -26,8 +26,9 @@ from langgraph.types import Send
 from agents.cluster.state import ClusterAgentState
 from agents.commons.node_executor import node_executor
 from agents.commons.routing import route_base
-from agents.commons.schemas import CollatedRecord, CollatedRecordRisk
+from agents.commons.schemas import CellReadings, CollatedRecordRisk
 from agents.commons.state_types import StatusValue
+from agents.logistics.state import LogisticsAgentState
 from agents.supervisor.state import RiskScore, SupervisorState
 
 logger = logging.getLogger(__name__)
@@ -45,12 +46,12 @@ def fan_out_to_clusters(state: SupervisorState) -> list[Send]:
     merge their state updates via the registered reducers."
 
     Each ``Send`` targets ``run_cluster_agent`` with a
-    ``ClusterAgentState`` pre-populated with that cluster's
-    CollatedRecords. After all parallel invocations complete (the
-    synchronization barrier), LangGraph advances to ``assess_situation``
-    with the accumulated ``cluster_score`` and ``cluster_findings``.
+    ``ClusterAgentState`` pre-populated with that cluster's CellReadings.
+    After all parallel invocations complete (the synchronization barrier),
+    LangGraph advances to ``assess_situation`` with the accumulated
+    ``cluster_score`` and ``cluster_findings``.
     """
-    clusters: dict[str, list[CollatedRecord]] = state.clusters
+    clusters: dict[str, list[CellReadings]] = state.clusters
     cluster_ids = list(clusters.keys())
     logger.info(
         "Supervisor fanning out to %d cluster(s): %s",
@@ -59,11 +60,11 @@ def fan_out_to_clusters(state: SupervisorState) -> list[Send]:
     )
 
     sends: list[Send] = []
-    for cluster_id, records in clusters.items():
+    for cluster_id, readings in clusters.items():
         cluster_state = ClusterAgentState(
             cluster_id=cluster_id,
             workflow_id=f"{cluster_id}::supervisor-fanout",
-            collated_records=records,
+            readings=readings,
             error=None,
         )
         sends.append(Send("run_cluster_agent", cluster_state))
@@ -87,11 +88,11 @@ def make_run_cluster_agent(cluster_graph: CompiledStateGraph):
     """
 
     @node_executor("run_cluster_agent")
-    def run_cluster_agent(state: ClusterAgentState) -> dict:
+    async def run_cluster_agent(state: ClusterAgentState) -> dict:
         cluster_id = state.cluster_id
         logger.info("Supervisor invoking cluster agent for cluster=%s", cluster_id)
 
-        result = cluster_graph.invoke(state)
+        result = await cluster_graph.ainvoke(state)
         assessments: list[CollatedRecordRisk] = result.get("risk_assessments", [])
         if assessments:
             highest = max(assessments, key=lambda r: r.risk_score)
@@ -144,6 +145,31 @@ def decide_actions(state: SupervisorState) -> dict:
     }
 
 
+def make_run_logistics_agent(logistics_graph: CompiledStateGraph):
+    """Factory that closes over the compiled logistics subgraph.
+
+    Builds the initial LogisticsAgentState from the supervisor's situation
+    summary and cluster findings, invokes the logistics graph, then lifts the
+    resulting plan back into supervisor state.
+    """
+
+    @node_executor("run_logistics_agent")
+    def run_logistics_agent(state: SupervisorState) -> dict:
+        logistics_state = LogisticsAgentState(
+            situation_summary=state.situation_summary or "",
+            cluster_findings=state.cluster_findings,
+        )
+        result = logistics_graph.invoke(logistics_state)
+        plan = result.get("logistics_plan")
+        logger.info(
+            "Logistics agent completed. Plan preview: %s",
+            (plan[:120] + "...") if plan and len(plan) > 120 else plan,
+        )
+        return {"logistics_plan": plan, "status": StatusValue.PROCESSING}
+
+    return run_logistics_agent
+
+
 def make_dispatch_commands(store: BaseStore | None = None):
     """Factory for the final dispatch node.
 
@@ -160,12 +186,49 @@ def make_dispatch_commands(store: BaseStore | None = None):
         print("Cluster risk scores (0–10)")
         for key, value in state.cluster_score.items():
             print(f"{key}: risk_score: {value.risk_score}, confidence: {value.confidence}")
+        if state.logistics_plan:
+            print("\nLOGISTICS PLAN")
+            print(state.logistics_plan)
         return {"status": StatusValue.COMPLETED}
 
     return dispatch_commands
 
 
 # ── Routers ──────────────────────────────────────────────────────────────────
+
+# Must match the risk_threshold passed to make_sector_analysis_node.
+# If sector_analysis won't find a hotspot, there's nothing for logistics to do.
+LOGISTICS_RISK_THRESHOLD = 5
+
+
+def route_after_assess(state: SupervisorState) -> str:
+    """Conditional edge after assess_situation.
+
+    Skips the logistics agent entirely when no cluster has a risk score at
+    or above the sector_analysis threshold — there are no hotspots to report
+    on, so firing the logistics LLM would waste tokens and produce noise.
+
+    Routes to:
+      "run_logistics_agent"  — at least one cluster scored >= LOGISTICS_RISK_THRESHOLD
+      "dispatch_commands"    — all scores below threshold, or no scores at all
+    """
+    if not state.cluster_score:
+        logger.info("route_after_assess: no cluster scores — skipping logistics")
+        return "dispatch_commands"
+
+    max_score = max(rs.risk_score for rs in state.cluster_score.values())
+    if max_score >= LOGISTICS_RISK_THRESHOLD:
+        logger.info(
+            "route_after_assess: max score %d >= %d — invoking logistics agent",
+            max_score, LOGISTICS_RISK_THRESHOLD,
+        )
+        return "run_logistics_agent"
+
+    logger.info(
+        "route_after_assess: max score %d < %d — skipping logistics",
+        max_score, LOGISTICS_RISK_THRESHOLD,
+    )
+    return "dispatch_commands"
 
 
 def route_after_decide(state: SupervisorState) -> str:

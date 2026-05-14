@@ -7,7 +7,7 @@ Bridges the sensor inventory (which tracks sensor placements) and the
 risk pipeline's collation step (which needs to map SensorEvents to
 grid cells and compute signal strength).
 
-Does NOT duplicate inventory raw — wraps the inventory and adds the
+Does NOT duplicate inventory data — wraps the inventory and adds the
 spatial queries that collation needs:
 
   - source_id → GridPosition (which cell is this sensor on?)

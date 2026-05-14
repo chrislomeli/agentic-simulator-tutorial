@@ -36,6 +36,17 @@ def sensor_engine():
         pressure_drift=0.0,
     )
     grid = GenericTerrainGrid(rows=5, cols=5, initial_state_factory=physics.initial_cell_state)
+    # Seed per-cell weather to match the environment (sampler reads from cell state)
+    for r in range(grid.rows):
+        for c in range(grid.cols):
+            cell = grid.get_cell(r, c)
+            grid.update_cell_state(r, c, cell.cell_state.model_copy(update={
+                "temperature_c": 30.0,
+                "humidity_pct": 50.0,
+                "wind_speed_mps": 5.0,
+                "wind_direction_deg": 90.0,
+                "pressure_hpa": 1013.0,
+            }))
     return GenericWorldEngine(grid=grid, environment=env, physics=physics)
 
 

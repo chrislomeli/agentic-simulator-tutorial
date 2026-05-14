@@ -12,7 +12,7 @@ SensorBase owns:
   - Reporting a health / confidence score via health().
 
 The subclass owns:
-  - read() — returns a plain dict with domain-specific raw.
+  - read() — returns a plain dict with domain-specific data.
     This is the ONLY method a new sensor type must implement.
 
 Example: adding a new sensor type

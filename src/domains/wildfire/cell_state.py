@@ -3,7 +3,7 @@ world-simiulator.domains.wildfire.cell_state
 
 FireCellState — per-cell state for wildfire simulation.
 
-This defines what raw lives on each grid cell in a wildfire scenario:
+This defines what data lives on each grid cell in a wildfire scenario:
   - terrain_type : what kind of land (forest, grassland, rock, etc.)
   - vegetation   : density of burnable material (0.0–1.0)
   - fuel_moisture: how wet the fuel is (0.0–1.0)
@@ -41,6 +41,13 @@ class FireCellState(CellState):
     fuel_moisture: float = 0.3
     slope: float = 0.0
 
+    # Per-cell weather (seeded from DB, evolved by physics each tick)
+    temperature_c: float = 30.0
+    humidity_pct: float = 25.0
+    wind_speed_mps: float = 5.0
+    wind_direction_deg: float = 0.0
+    pressure_hpa: float = 1013.0
+
     # Fire state (changes during simulation via StateEvents)
     fire_state: FireState = FireState.UNBURNED
     fire_intensity: float = 0.0
@@ -51,6 +58,25 @@ class FireCellState(CellState):
     rate_of_spread_ft_min: float = 0.0
     flame_length_ft: float = 0.0
     fireline_intensity_btu_ft_s: float = 0.0
+
+    def to_local_conditions(self) -> dict[str, float | str]:
+        """Return the per-cell ground truth as a local_conditions dict.
+
+        This is what the sampler passes to sensor.emit(). Sensors pick
+        out the keys they care about and add noise.
+        """
+        return {
+            "ambient_temperature_c": self.temperature_c,
+            "humidity_pct": self.humidity_pct,
+            "wind_speed_mps": self.wind_speed_mps,
+            "wind_direction_deg": self.wind_direction_deg,
+            "pressure_hpa": self.pressure_hpa,
+            "fuel_moisture": self.fuel_moisture,
+            "vegetation": self.vegetation,
+            "terrain_type": self.terrain_type.value,
+            "fire_state": self.fire_state.value,
+            "fire_intensity": self.fire_intensity,
+        }
 
     def summary_label(self) -> str:
         """Used by the engine for logging and grid summary counts."""

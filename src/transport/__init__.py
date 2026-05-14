@@ -8,7 +8,7 @@ Everything related to moving events between components.
   queue.py    ← Async event queue decoupling producers from consumers.
 
 Nothing in this package knows about LangGraph, sensors, or actuators.
-It is pure raw contract + naming conventions.
+It is pure data contract + naming conventions.
 """
 
 from transport.queue import SensorEventQueue as SensorEventQueue

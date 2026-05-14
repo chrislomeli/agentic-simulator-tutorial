@@ -1,8 +1,8 @@
 """
 runtime.orchestrator
 
-The runtime loop that drives sensor events through the streaming
-collator into the supervisor graph.
+The runtime loop that drives sensor events from the publisher into the
+supervisor graph.
 
 Architecture
 ────────────
@@ -12,38 +12,33 @@ Architecture
         ▼                                            ▼
     GenericWorldEngine                       CellStateManager.update()
                                                      │
-                                                     │ list[CollatedRecord]
+                                                     │ triggered (cluster_id, row, col)
                                                      ▼
-                                    group by cluster_id, snapshot cluster
+                                    CellStateManager.readings_for(positions)
                                                      │
+                                                     │ dict[cluster_id, list[CellReadings]]
                                                      ▼
                                           SupervisorGraph.ainvoke()
                                           (fans out to cluster agents,
                                            aggregates cluster_score +
                                            cluster_findings)
-                                                     │
-                                                     ▼
-                                         dict[str, int]  ← cluster_score
-                                         per-cluster risk heat map
 
 The orchestrator owns three things and one loop:
 
   1. A SensorPublisher — produces SensorEvents on a tick cadence and
      puts them on an asyncio queue. Drives engine.tick() per cycle.
-  2. A CellStateManager — receives every event, maintains rolling
-     per-cell state, returns CollatedRecords when thresholds cross.
+  2. A CellStateManager — receives every event, maintains per-cell
+     state (latest values + recent history), reports triggered
+     positions when thresholds cross.
   3. A compiled SupervisorGraph — invoked with pre-populated
-     ``clusters`` (CollatedRecords grouped by cluster_id). The
-     supervisor fans out to cluster agents internally via the Send API.
+     ``clusters`` (CellReadings grouped by cluster_id). The supervisor
+     fans out to cluster agents internally via the Send API.
 
 What the orchestrator is NOT
 ────────────────────────────
   * Not a LangGraph node — it sits outside the graph hierarchy.
   * Not responsible for physics. The engine ticks via the publisher;
     the orchestrator only listens to sensor output.
-  * Not the collator for the LLM path — the CellStateManager IS the
-    collator. The supervisor graph receives pre-collated records and
-    does not run a collate node.
 """
 
 from __future__ import annotations
@@ -54,7 +49,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from agents.commons.schemas import CollatedRecord
+from agents.commons.schemas import CellReadings
 from agents.supervisor.state import RiskScore, SupervisorGraph, SupervisorState
 from sensors.publisher import SensorPublisher
 from transport.queue import SensorEventQueue
@@ -99,36 +94,16 @@ def default_sampler(
     """
     Default ``local_conditions`` builder.
 
-    Samples the engine's global ``FireEnvironmentState`` for ambient
-    weather and the cell's ``FireCellState`` for terrain. Concrete
-    sensors pick out the keys they care about (temperature reads
-    ``temperature_c``, wind reads ``wind_speed_mps``, etc.).
+    Reads directly from the cell's per-cell ground truth state. Weather
+    is now stored per-cell on FireCellState and evolved by physics each
+    tick, so this sampler is just a thin accessor.
 
-    This is a deliberately simple default — it does not model
-    micro-climate, terrain channeling, or per-cell weather variance.
-    Callers can pass their own sampler to the orchestrator if they
-    want richer behavior.
+    Sensors pick out the keys they care about (temperature reads
+    ``ambient_temperature_c``, wind reads ``wind_speed_mps``, etc.)
+    and add noise.
     """
-    env = engine.environment
     cell = engine.grid.get_cell(grid_row, grid_col)
-    state = cell.cell_state
-
-    max_wind_mph = 100
-    wind_step_mph = 30
-    max_temp = 120
-    temp_step = 60
-
-    response = {
-        "ambient_temperature_c": min(max_temp, (env.temperature_c + temp_step)),
-        "humidity_pct": max(0, env.humidity_pct - 10),
-        "wind_speed_mps": min(max_wind_mph, (env.wind_speed_mps + wind_step_mph)),
-        "wind_direction_deg": env.wind_direction_deg,
-        "pressure_hpa": env.pressure_hpa,
-        "fuel_moisture": state.fuel_moisture,
-        "vegetation": state.vegetation,
-        "terrain_type": state.terrain_type.value,
-    }
-    return response
+    return cell.cell_state.to_local_conditions()
 
 
 # ── Orchestrator ─────────────────────────────────────────────────────────────
@@ -158,10 +133,12 @@ class RuntimeOrchestrator:
         sensor_inventory: SensorInventory,
         engine: GenericWorldEngine,
         supervisor_graph: SupervisorGraph,
+        cell_state_manager: CellStateManager | None = None,
         thresholds: EvaluationThresholds | None = None,
         sampler: SamplerFn | None = None,
         tick_interval_seconds: float = 1.0,
         queue_max_size: int = 1000,
+        location_count: int | None = None,
     ) -> None:
         """
         Parameters
@@ -182,6 +159,8 @@ class RuntimeOrchestrator:
                                 (e.g. 0.05) for fast smoke tests.
         queue_max_size    : back-pressure threshold. Publisher blocks
                             on put() when reached.
+        location_count    : sensors to sample per tick. None = all sensors
+                            (default). Pass an int to throttle LLM cost.
         """
         self._inventory = sensor_inventory
         self._engine = engine
@@ -189,7 +168,7 @@ class RuntimeOrchestrator:
         self._sampler = sampler or default_sampler
 
         self._queue = SensorEventQueue(maxsize=queue_max_size)
-        self._manager = CellStateManager(
+        self._manager = cell_state_manager or CellStateManager(
             world_grid=engine.grid,
             sensor_inventory=sensor_inventory,
             thresholds=thresholds,
@@ -201,6 +180,8 @@ class RuntimeOrchestrator:
             engine=engine,
             sampler=self._sampler,
         )
+
+        self._location_count = location_count
 
         self._stats = RuntimeStats()
         self._stop_requested = False
@@ -237,7 +218,7 @@ class RuntimeOrchestrator:
         self._stats = RuntimeStats()
 
         publisher_task = asyncio.create_task(
-            self._publisher.run(ticks=ticks),
+            self._publisher.run(ticks=ticks, location_count=self._location_count),
             name="sensor-publisher",
         )
 
@@ -277,12 +258,11 @@ class RuntimeOrchestrator:
                     except asyncio.QueueEmpty:
                         break
 
-                # Track which cells triggered, keyed by cluster. The
-                # snapshot picks up every cell with raw; the trigger set
-                # tells snapshot_cluster which records to flag with
-                # ``triggered=True`` so the agent can distinguish focal
-                # cells from surrounding spatial context.
-                triggered_by_cluster: dict[str, set[tuple[int, int]]] = {}
+                # Track which cells triggered. We re-snapshot from the
+                # manager at the end of the tick rather than using values
+                # from each trigger moment, so the payload reflects the
+                # latest state after all events in this tick have landed.
+                triggered_positions: set[tuple[int, int]] = set()
                 for event in tick_events:
                     self._stats.events_consumed += 1
                     try:
@@ -291,34 +271,21 @@ class RuntimeOrchestrator:
                         self._queue.task_done()
                     if triggered:
                         self._stats.records_emitted += len(triggered)
-                        for record in triggered:
-                            positions = triggered_by_cluster.setdefault(
-                                record.cluster_id,
-                                set(),
-                            )
-                            positions.add((record.position.row, record.position.col))
+                        for _cluster_id, row, col in triggered:
+                            triggered_positions.add((row, col))
 
-                # One supervisor invocation per dirty cluster batch.
-                # Use 3x3 halo around triggered cells for bounded context.
-                all_triggered_positions: set[tuple[int, int]] = set()
-                for positions in triggered_by_cluster.values():
-                    all_triggered_positions.update(positions)
-
-                records_by_cluster = self._manager.snapshot_halo(
-                    center_positions=all_triggered_positions,
-                    triggered_positions=all_triggered_positions,
+                # One supervisor invocation per tick. Sector analysis in
+                # logistics will provide the landscape-wide context.
+                payload: dict[str, list[CellReadings]] = self._manager.readings_for(
+                    positions=triggered_positions,
                 )
 
-                payload: dict[str, list[CollatedRecord]] = {}
-                all_included_positions: set[tuple[int, int]] = set()
-                for cluster_id, records in records_by_cluster.items():
-                    if not records:
-                        continue
-                    payload[cluster_id] = records
-                    for record in records:
-                        all_included_positions.add((record.position.row, record.position.col))
+                included_positions: set[tuple[int, int]] = set()
+                for readings in payload.values():
+                    for r in readings:
+                        included_positions.add((r.position.row, r.position.col))
 
-                self._manager.mark_cells_evaluated(all_included_positions)
+                self._manager.mark_cells_evaluated(included_positions)
                 if payload:
                     await self._invoke_supervisor_graph(payload)
 
@@ -345,7 +312,7 @@ class RuntimeOrchestrator:
 
     # ── Internal helpers ────────────────────────────────────────────────────
 
-    async def _invoke_supervisor_graph(self, payload: dict[str, list[CollatedRecord]]) -> None:
+    async def _invoke_supervisor_graph(self, payload: dict[str, list[CellReadings]]) -> None:
         """
         Invoke the supervisor graph for one tick's worth of triggered clusters.
 

@@ -89,6 +89,14 @@ class Terrain(BaseModel):
     lat: Optional[float] = None
     long: Optional[float] = None
     location: Optional[str] = None  # geography(Point, 4326) as WKT string
+    region: Optional[str] = None
+
+    # Per-cell weather seed (initial conditions at tick 0)
+    temperature_c: Optional[float] = None
+    humidity_pct: Optional[float] = None
+    wind_speed_mps: Optional[float] = None
+    wind_direction_deg: Optional[float] = None
+    pressure_hpa: Optional[float] = None
 
 
 class WildfireActivity(BaseModel):

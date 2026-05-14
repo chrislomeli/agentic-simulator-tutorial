@@ -57,7 +57,7 @@ confidence  : Float 0.0–1.0.  Set by the sensor based on its own
               0.0 = sensor is reporting but considers itself faulty.
               Agents can use this to weight readings.
 
-payload     : The actual reading raw.  Opaque dict.  The envelope
+payload     : The actual reading data.  Opaque dict.  The envelope
               carries it but never inspects it.  Structure is
               defined by the sensor type and documented in the
               sensor's own module.
@@ -115,7 +115,7 @@ class SensorEvent(BaseModel):
     # ── Opaque content ────────────────────────────────────────────────
     payload: dict[str, Any] = Field(
         default_factory=dict,
-        description="Domain-specific reading raw. Envelope never inspects this.",
+        description="Domain-specific reading data. Envelope never inspects this.",
     )
     metadata: dict[str, Any] = Field(
         default_factory=dict,

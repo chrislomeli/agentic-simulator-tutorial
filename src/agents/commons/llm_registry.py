@@ -144,8 +144,13 @@ class LLMRegistry:
         result = llm.invoke(messages)
     """
 
-    def __init__(self, clients: dict[str, Any]) -> None:
+    def __init__(
+        self,
+        clients: dict[str, Any],
+        callbacks: dict[str, "TokenUsageCallback"] | None = None,
+    ) -> None:
         self._clients = clients
+        self._callbacks = callbacks or {}
 
     def get(self, role: str, default: str | None = None) -> Any:
         client = self._clients.get(role, default)
@@ -157,26 +162,38 @@ class LLMRegistry:
     def roles(self) -> list[str]:
         return sorted(self._clients)
 
+    def usage_report(self) -> list[dict]:
+        """Return per-role token usage totals accumulated since registry was built."""
+        return [cb.report() for cb in self._callbacks.values()]
 
-def _build_chat_model(model_cfg: LLMModel, ollama_base_url: str) -> Any:
+
+def _build_chat_model(
+    model_cfg: LLMModel,
+    ollama_base_url: str,
+    callback: "TokenUsageCallback | None" = None,
+) -> Any:
     """Instantiate a LangChain chat model from a resolved LLMModel."""
+    from agents.commons.token_callback import TokenUsageCallback
+
     api_key = (
         model_cfg.api_key.get_secret_value()
         if isinstance(model_cfg.api_key, SecretStr)
         else model_cfg.api_key
     )
+    callbacks = [callback] if callback is not None else []
+
     if model_cfg.provider == LLMProvider.OPENAI:
         from langchain_openai import ChatOpenAI
 
-        return ChatOpenAI(model=model_cfg.model, temperature=0, api_key=api_key)
+        return ChatOpenAI(model=model_cfg.model, temperature=0, api_key=api_key, callbacks=callbacks)
     elif model_cfg.provider == LLMProvider.ANTHROPIC:
         from langchain_anthropic import ChatAnthropic
 
-        return ChatAnthropic(model_name=model_cfg.model, api_key=api_key, temperature=0)
+        return ChatAnthropic(model_name=model_cfg.model, api_key=api_key, temperature=0, callbacks=callbacks)
     elif model_cfg.provider == LLMProvider.OLLAMA:
         from langchain_ollama import ChatOllama
 
-        return ChatOllama(model=model_cfg.model, temperature=0, base_url=ollama_base_url)
+        return ChatOllama(model=model_cfg.model, temperature=0, base_url=ollama_base_url, callbacks=callbacks)
     raise ValueError(f"Unknown provider: {model_cfg.provider}")
 
 
@@ -197,7 +214,10 @@ def build_llm_registry(
     STUB roles are skipped — registry.get() will raise KeyError if all
     roles are stubs and there is no fallback.
     """
+    from agents.commons.token_callback import TokenUsageCallback
+
     clients: dict[str, Any] = {}
+    callbacks: dict[str, TokenUsageCallback] = {}
 
     for role, label in role_config.items():
         model_cfg = model_catalog.get(label)
@@ -209,8 +229,10 @@ def build_llm_registry(
         raw = getattr(settings, resolved.key_label, None)
         resolved.api_key = raw if raw else None
 
-        chat_model = _build_chat_model(resolved, settings.ollama_base_url)
+        callback = TokenUsageCallback(role)
+        chat_model = _build_chat_model(resolved, settings.ollama_base_url, callback)
         clients[role] = chat_model
+        callbacks[role] = callback
         logger.info(
             "Registered LLM for role %r → %s (%s)",
             role,
@@ -218,4 +240,4 @@ def build_llm_registry(
             resolved.provider.value,
         )
 
-    return LLMRegistry(clients)
+    return LLMRegistry(clients, callbacks)

@@ -27,78 +27,64 @@ Run from the project root::
 from __future__ import annotations
 
 import asyncio
-import datetime
 import logging
 
 from agents.commons.agent_dependencies import AgentDependencies
-from agents.commons.geo import cell_size_miles
-from agents.commons.schemas import GridPosition, Metric, CollatedRecord, TerrainContext, CoverageSummary, TimeWindow
 from agents.supervisor.graph import build_supervisor_graph
-from agents.supervisor.state import SupervisorGraph, SupervisorState
+from agents.supervisor.state import SupervisorGraph
 from logging_config import configure_logging
 from prompts import PromptRegistry
+from world import GenericWorldEngine
 
 # configure_logging() must come before all project imports so that
 # module-level loggers are captured by structlog from the first record.
 configure_logging(level=logging.INFO)
 
 
-from agents.commons.schemas import CollatedRecord, RiskAssessment  # noqa: E402
-from config import get_settings  # noqa: E402
+from agents.commons.schemas import CellReadings, RiskAssessment, CollatedRecordRisk  # noqa: E402
+from config import get_settings # noqa: E402
 from stores import get_pg_gateway  # noqa: E402
 from agents.commons.llm_registry import LLMLabel, build_llm_registry, models
 from domains.wildfire.sampler import sample_local_conditions  # noqa: E402
-from domains.wildfire.scenario_loader import load_scenario_from_package  # noqa: E402
-from domains.wildfire.world_builder.regions import get_region  # noqa: E402
+from domains.wildfire.scenario_loader import load_scenario_from_db  # noqa: E402
 from runtime import RuntimeOrchestrator  # noqa: E402
+from world.cell_state_manager import CellStateManager  # noqa: E402
 
 # Smoke-test cadence — fast enough that the demo finishes in a few
 # seconds, slow enough that publisher and consumer can interleave.
 SMOKE_TICKS = 1
 SMOKE_TICK_INTERVAL_SEC = 0.05
 
-
-def print_world_summary(engine, sensor_inventory, region) -> None:
-    """One-shot summary of the loaded world before the loop starts."""
-    rows, cols = engine.grid.rows, engine.grid.cols
-    lat_mi, lon_mi = cell_size_miles(rows, cols, region.bounds)
-    print()
-    print(f"=== World loaded: {rows}x{cols} grid over {region.display_name} ===")
-    print(f"  Cell size: ~{lat_mi:.2f} mi (lat) × {lon_mi:.2f} mi (lon)")
-
-    sensors_by_cluster: dict[str, int] = {c: 0 for c in region.clusters}
-    for sensor in sensor_inventory.all_sensors():
-        sensors_by_cluster[sensor.cluster_id] = (
-            sensors_by_cluster.get(sensor.cluster_id, 0) + 1
-        )
-    print(f"  Sensors:   {sum(sensors_by_cluster.values())} "
-          f"(from {len(region.raws_stations)} RAWS stations × 3 types each)")
-    for cluster, n in sensors_by_cluster.items():
-        print(f"    {cluster:24s} {n:3d}")
-
-
-def build_agent_deps() -> AgentDependencies:
+def build_agent_deps(
+    engine: GenericWorldEngine,
+    cell_state_manager: CellStateManager,
+    pg_gateway=None,
+) -> AgentDependencies:
     """Construct the LLM/prompt/store dependencies for graph compilation."""
     settings = get_settings()
     settings.apply_langsmith()
 
     llm_registry = build_llm_registry(settings, models, {
         "classifier": LLMLabel.GPT_MINI,
+        "logistics": LLMLabel.GPT_MINI,
     })
 
     store = None
 
     prompt_registry = PromptRegistry()
-    prompt_registry.register_models(CollatedRecord, RiskAssessment)
+    prompt_registry.register_models(CellReadings, CollatedRecordRisk)
 
     return AgentDependencies(
         prompt_registry=prompt_registry,
         llm_registry=llm_registry,
+        world_engine=engine,
+        cell_state_manager=cell_state_manager,
         store=store,
+        pg_gateway=pg_gateway,
     )
 
 
-async def run_orchestrator(engine, sensor_inventory, agent_deps) -> None:
+async def run_orchestrator(engine, sensor_inventory, cell_state_manager, agent_deps) -> None:
     """Build the supervisor graph, construct the orchestrator, run it."""
     supervisor_graph: SupervisorGraph = build_supervisor_graph(agent_dependencies=agent_deps)
 
@@ -106,8 +92,10 @@ async def run_orchestrator(engine, sensor_inventory, agent_deps) -> None:
         sensor_inventory=sensor_inventory,
         engine=engine,
         supervisor_graph=supervisor_graph,
+        cell_state_manager=cell_state_manager,
         sampler=sample_local_conditions,
         tick_interval_seconds=SMOKE_TICK_INTERVAL_SEC,
+        location_count=1
     )
 
     print()
@@ -130,16 +118,19 @@ async def run_orchestrator(engine, sensor_inventory, agent_deps) -> None:
 
 
 def main() -> None:
-    print("GET WORLD")
-    region = get_region("lpnf-south")
     pg = get_pg_gateway()
-    engine, sensor_inventory, risk_heat_map = load_scenario_from_package(pg, "lpnf-south")
+    try:
+        engine, sensor_inventory = load_scenario_from_db("lpnf-south", pg)
 
-    print_world_summary(engine, sensor_inventory, region)
+        cell_state_manager = CellStateManager(
+            world_grid=engine.grid,
+            sensor_inventory=sensor_inventory,
+        )
 
-    print("\n\nINVOKE GRAPH")
-    agent_dependencies = build_agent_deps()
-    asyncio.run(run_orchestrator(engine, sensor_inventory, risk_heat_map, agent_dependencies))
+        agent_dependencies = build_agent_deps(engine, cell_state_manager, pg_gateway=pg)
+        asyncio.run(run_orchestrator(engine, sensor_inventory, cell_state_manager, agent_dependencies))
+    finally:
+        pg.close()
 
 
 if __name__ == "__main__":

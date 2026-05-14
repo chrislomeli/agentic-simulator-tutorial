@@ -22,7 +22,7 @@ class WildfireRepository:
         max_acres: int,
         limit: int = 10,
     ) -> list[WildfireActivity]:
-        """Fetch historical fires by size range, most recent first.
+        """Fetchhistorical fires by size range, most recent first.
 
         Used as fallback data when the agent cannot estimate resource needs
         from current scenario data alone.
@@ -37,6 +37,12 @@ class WildfireRepository:
         -------
         List of WildfireActivity records, sorted by date descending
         """
+        logger.info(
+            "DATABASE: Fetching historical fires between %d and %d acres",
+            min_acres,
+            max_acres,
+        )
+
         rows = self._pg.fetch_rows(
             """
             select
@@ -60,7 +66,7 @@ class WildfireRepository:
                 structures_lost,
                 cost_to_date,
                 origin_ownership
-            from wildfire.wildfire_activity
+            from wildfire_activity
             where fire_size_acres between %s and %s
             order by imsr_date desc
             limit %s
@@ -110,7 +116,7 @@ class WildfireRepository:
                 structures_lost,
                 cost_to_date,
                 origin_ownership
-            from wildfire.wildfire_activity
+            from wildfire_activity
             where fire_name ilike %s
             order by imsr_date desc
             limit %s

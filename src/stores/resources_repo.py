@@ -68,47 +68,74 @@ class TranscriptRepository:
             )
             return cur.rowcount
 
-    def fetch_resources(self, lat: float, long: float, radius_miles: float) -> list[Resource]:
-        """Return resources within radius_miles of (lat, long), ordered by distance.
+    def fetch_resources_with_commitments(
+        self, lat: float, long: float, radius_miles: float
+    ) -> list[dict]:
+        """Return resources within radius with commitment status + fire details.
 
-        Returns [] on miss or error.
+        Returns [] on miss or error. Each dict contains resource fields,
+        distance_miles, status ('available'|'committed'), and fire details
+        (if committed). Caller (tool layer) transforms into agent-optimized
+        structures.
         """
+        logger.info("DATABASE: Fetching resources within %s miles of %s, %s", radius_miles, lat, long)
+
+
         try:
             rows = self._pg.fetch_rows(
                 """
+                with commitments as (
+                    select
+                        ra.resource_id,
+                        ra.commitment_level,
+                        (now() - make_interval(days => ra.commitment_start_days))::date
+                            as commitment_start_date,
+                        ra.commitment_length_days,
+                        c.fire_id,
+                        c.fire_name,
+                        c.fire_size_acres,
+                        c.percent_containment,
+                        c.gacc_priority,
+                        c.personnel as fire_personnel,
+                        c.crews,
+                        c.engines,
+                        c.helicopters,
+                        c.structures_lost
+                    from resource_assignments ra
+                    join current_fires c on ra.fire_id = c.fire_id
+                )
                 select
-                    resource_id,
-                    source_file,
-                    agency,
-                    cal_file_unit,
-                    unit_id,
-                    resource_category,
-                    resource_type,
-                    nwcg_type,
-                    year,
-                    male,
-                    model,
-                    capacity_water_gal,
-                    pump_gpm,
-                    personnel,
-                    battalion,
-                    station_number,
-                    station_name,
-                    station_address,
-                    mutual_aid_agreement,
-                    lpf_interface_priority,
-                    seasonal,
-                    lat,
-                    long,
-                    notes,
-                    location,
+                    r.resource_id,
+                    r.resource_category,
+                    r.resource_type,
+                    r.nwcg_type,
+                    r.personnel,
+                    r.battalion,
+                    r.station_name,
+                    r.lat,
+                    r.long,
                     ST_Distance(
-                        location,
+                        r.location,
                         ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography
-                    ) / 1609.344 as distance_miles
-                from resources
+                    ) / 1609.344 as distance_miles,
+                    case when c.resource_id is null then 'available' else 'committed' end as status,
+                    c.commitment_level,
+                    c.commitment_start_date,
+                    c.commitment_length_days,
+                    c.fire_id,
+                    c.fire_name,
+                    c.fire_size_acres,
+                    c.percent_containment,
+                    c.gacc_priority,
+                    c.fire_personnel,
+                    c.crews,
+                    c.engines,
+                    c.helicopters,
+                    c.structures_lost
+                from resources r
+                left join commitments c on c.resource_id = r.resource_id
                 where ST_DWithin(
-                    location,
+                    r.location,
                     ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography,
                     %s * 1609.344
                 )
@@ -116,8 +143,8 @@ class TranscriptRepository:
                 """,
                 (long, lat, long, lat, radius_miles),
             )
-            return [Resource.model_validate(r) for r in rows] if rows else []
+            return rows or []
         except Exception as e:
-            logger.exception("fetch_resources failed: %s", e)
+            logger.exception("fetch_resources_with_commitments failed: %s", e)
             return []
 

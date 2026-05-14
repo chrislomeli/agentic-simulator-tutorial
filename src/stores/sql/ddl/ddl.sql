@@ -11,7 +11,7 @@ create table if not exists resources
     resource_type          varchar(60),
     nwcg_type              varchar(30),
     year                   varchar(10),
-    male                   varchar(30),
+    make                   varchar(30),
     model                  varchar(10),
     capacity_water_gal     integer,
     pump_gpm               integer,
@@ -41,6 +41,8 @@ create table if not exists spatial_ref_sys
     proj4text varchar(2048)
 );
 
+grant select on spatial_ref_sys to public;
+
 create table if not exists terrain
 (
     grid_column         integer,
@@ -58,6 +60,11 @@ create table if not exists terrain
     long                double precision,
     location            geography(Point, 4326),
     region              varchar(60),
+    temperature_c       real default 30.0,
+    humidity_pct        real default 25.0,
+    wind_speed_mps      real default 5.0,
+    wind_direction_deg  real default 0.0,
+    pressure_hpa        real default 1013.0,
     constraint terrain_pk
         unique (grid_column, grid_row)
 );
@@ -103,12 +110,62 @@ create table if not exists wildfire_activity
     origin_ownership     varchar(60)
 );
 
--- Indexes for wildfire resource estimation queries
--- Range queries on fire_size_acres sorted by date need this composite index
-create index if not exists idx_wildfire_size_date
-    on wildfire_activity (fire_size_acres, imsr_date desc);
+create table if not exists resource_assignments
+(
+    resource_id            integer,
+    fire_id                integer,
+    commitment_level       integer,
+    commitment_start_days  integer,
+    commitment_length_days integer
+);
 
--- Case-insensitive fire name lookups
-create index if not exists idx_wildfire_name
-    on wildfire_activity using gin (fire_name gin_trgm_ops);
+comment on column resource_assignments.commitment_start_days is 'days since committment started - for simulation backdate this many days to get s start date';
 
+create table if not exists current_fires
+(
+    imsr_date           date,
+    gacc                varchar(30),
+    gacc_priority       integer,
+    fire_priority       integer,
+    new_large_fire_mark varchar(10),
+    fire_name           varchar(120),
+    unit                varchar(30),
+    fire_size_acres     integer,
+    fire_size_change    varchar(20),
+    percent_containment integer,
+    contained_completed varchar(30),
+    personnel           integer,
+    personnel_change    varchar(30),
+    crews               integer,
+    engines             integer,
+    helicopters         integer,
+    structures_lost     integer,
+    cost_to_date        varchar(20),
+    origin_ownership    varchar(60),
+    lat                 double precision,
+    long                double precision,
+    location            geography(Point, 4326),
+    fire_id             integer
+);
+
+drop table resource_advisories;
+
+create table if not exists resource_advisories
+(
+    id                   uuid                                      not null
+        primary key,
+    created_at           timestamp with time zone                  not null,
+    status               varchar default 'SENT'::character varying not null  CHECK (status IN ('SENT', 'SUPPRESSED', 'ACKNOWLEDGED')),
+    epicenter_row        integer                                   not null,
+    epicenter_column     integer                                   not null,
+    location_description varchar                                   not null,
+    situation            text                                      not null,
+    urgency_level        integer                                   not null
+        constraint valid_urgency
+            check ((urgency_level >= 1) AND (urgency_level <= 4)),
+    notes                text                                      not null,
+    recommendation       text                                      not null
+);
+
+create index if not exists idx_resource_advisories_guardrail
+    on resource_advisories (epicenter_row, epicenter_column, status, created_at);
