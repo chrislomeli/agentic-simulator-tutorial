@@ -1,6 +1,6 @@
 """Tests for world-simiulator.transport.schemas — SensorEvent envelope."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from pydantic import ValidationError
@@ -73,7 +73,7 @@ class TestSensorEventConfidence:
                 source_id="s1",
                 source_type="t",
                 cluster_id="c1",
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 confidence=1.5,
                 payload={},
             )
@@ -85,7 +85,7 @@ class TestSensorEventConfidence:
                 source_id="s1",
                 source_type="t",
                 cluster_id="c1",
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 confidence=-0.5,
                 payload={},
             )
@@ -93,11 +93,11 @@ class TestSensorEventConfidence:
     def test_confidence_at_bounds(self):
         e0 = SensorEvent(
             event_id="a", source_id="s", source_type="t", cluster_id="c",
-            timestamp=datetime.now(timezone.utc), confidence=0.0, payload={},
+            timestamp=datetime.now(UTC), confidence=0.0, payload={},
         )
         e1 = SensorEvent(
             event_id="b", source_id="s", source_type="t", cluster_id="c",
-            timestamp=datetime.now(timezone.utc), confidence=1.0, payload={},
+            timestamp=datetime.now(UTC), confidence=1.0, payload={},
         )
         assert e0.confidence == 0.0
         assert e1.confidence == 1.0

@@ -5,7 +5,6 @@ import pytest
 from sensors.base import FailureMode, SensorBase
 from world.sensor_inventory import SensorInventory
 
-
 # ── Minimal sensor for testing ───────────────────────────────────────────────
 
 class StubSensor(SensorBase):
@@ -58,10 +57,12 @@ class TestRegistration:
         with pytest.raises(ValueError, match="already registered"):
             inventory.register(s, row=1, col=1)
 
-    def test_register_out_of_bounds_raises(self, inventory):
+    def test_register_out_of_bounds_allowed_when_validation_disabled(self, inventory):
+        # Default inventory has validate_bounds=False
         s = StubSensor(source_id="s1")
-        with pytest.raises(ValueError, match="out of bounds"):
-            inventory.register(s, row=5, col=0)
+        # Should NOT raise - out of bounds allowed when validation disabled
+        inventory.register(s, row=5, col=0)  # row=5 is outside 5x5 grid
+        assert inventory.size == 1
 
     def test_unregister(self, inventory):
         s = StubSensor(source_id="s1")

@@ -48,7 +48,7 @@ from langgraph.graph.message import add_messages
 from langgraph.graph.state import CompiledStateGraph
 from pydantic import BaseModel, Field
 
-from agents.commons.schemas import CollatedRecord, CollatedRecordRisk, TracedState
+from agents.commons.schemas import CellReadings, CollatedRecordRisk, TracedState
 
 # ── Typed graph ────────────────────────────────────────────────────
 SupervisorGraph = NewType("SupervisorGraph", CompiledStateGraph)
@@ -120,7 +120,7 @@ class SupervisorState(TracedState):
     workflow_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
 
     # ── Input ────────────────────────────────────────────────────────
-    clusters: dict[str, list[CollatedRecord]] = Field(default_factory=dict)
+    clusters: dict[str, list[CellReadings]] = Field(default_factory=dict)
 
     # ── Aggregated output of cluster fan-out ─────────────────────────
     cluster_score: Annotated[dict[str, RiskScore], max_cluster_score] = Field(default_factory=dict)
@@ -137,3 +137,6 @@ class SupervisorState(TracedState):
 
     # ── Situation summary ────────────────────────────────────────────
     situation_summary: str | None = None
+
+    # ── Logistics plan (written by run_logistics_agent node) ─────────
+    logistics_plan: str | None = None

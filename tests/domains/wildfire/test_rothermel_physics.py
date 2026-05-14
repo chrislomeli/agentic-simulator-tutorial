@@ -1,6 +1,5 @@
 """Tests for world-simiulator.domains.wildfire.rothermel_physics."""
 
-import math
 import random
 
 import pytest
@@ -56,6 +55,11 @@ def grassland_cell():
         vegetation=0.8,
         fuel_moisture=0.05,   # very dry
         slope=0.0,
+        # Per-cell weather matching hot_dry_windy conditions
+        temperature_c=40.0,
+        humidity_pct=5.0,
+        wind_speed_mps=12.0,
+        wind_direction_deg=225.0,
     )
 
 
@@ -66,6 +70,11 @@ def forest_cell():
         vegetation=0.9,
         fuel_moisture=0.28,   # near extinction
         slope=0.0,
+        # Per-cell weather matching cool_wet_calm conditions
+        temperature_c=15.0,
+        humidity_pct=55.0,
+        wind_speed_mps=1.0,
+        wind_direction_deg=0.0,
     )
 
 

@@ -16,8 +16,10 @@ Quick reference:
 
 from agents.cluster.graph import build_cluster_agent_graph
 from agents.cluster.state import ClusterAgentState
+from agents.commons.agent_dependencies import AgentDependencies
 
 __all__ = [
+    "AgentDependencies",
     "ClusterAgentState",
     "build_cluster_agent_graph",
 ]

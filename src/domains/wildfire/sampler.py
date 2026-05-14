@@ -56,7 +56,7 @@ def sample_local_conditions(
     """
     env: FireEnvironmentState = engine.environment  # type: ignore[assignment]
 
-    # Own cell state
+    # Own cell state — per-cell weather lives here now
     own_cell = engine.grid.get_cell(grid_row, grid_col)
     own_state = own_cell.cell_state
     own_fire_intensity = (
@@ -88,13 +88,14 @@ def sample_local_conditions(
                 }
             )
 
+    # Read weather from per-cell state (evolved by physics each tick)
     return {
-        "ambient_temperature_c": env.temperature_c,
-        "humidity_pct": env.humidity_pct,
-        "wind_speed_mps": env.wind_speed_mps,
-        "wind_direction_deg": env.wind_direction_deg,
+        "ambient_temperature_c": own_state.temperature_c,
+        "humidity_pct": own_state.humidity_pct,
+        "wind_speed_mps": own_state.wind_speed_mps,
+        "wind_direction_deg": own_state.wind_direction_deg,
         "wind_vector": env.wind_vector(),
-        "pressure_hpa": env.pressure_hpa,
+        "pressure_hpa": own_state.pressure_hpa,
         "own_fire_intensity": own_fire_intensity,
         "own_fire_state": own_state.fire_state.value,
         "neighbor_fire_heat": neighbor_fire_heat,

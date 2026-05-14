@@ -2,9 +2,8 @@
 
 import pytest
 
-from world.cell_state import CellState
 from world import PhysicsModule, StateEvent
-
+from world.cell_state import CellState
 
 # ── Test fixtures ────────────────────────────────────────────────────────────
 

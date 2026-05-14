@@ -26,140 +26,96 @@ Run from the project root::
 
 from __future__ import annotations
 
-import datetime
+import asyncio
 import logging
 
-from agents.commons.geo import cell_size_miles
-from agents.commons.schemas import GridPosition, Metric, TerrainContext, CoverageSummary, TimeWindow
+from agents.commons.agent_dependencies import AgentDependencies
 from agents.supervisor.graph import build_supervisor_graph
-from agents.supervisor.state import SupervisorGraph, SupervisorState
+from agents.supervisor.state import SupervisorGraph
 from logging_config import configure_logging
-
+from world import GenericWorldEngine
 
 # configure_logging() must come before all project imports so that
 # module-level loggers are captured by structlog from the first record.
 configure_logging(level=logging.INFO)
-
-
-from agents.commons.schemas import CollatedRecord, RiskAssessment  # noqa: E402
-from config import get_settings # noqa: E402
-from domains.wildfire.scenario_loader import load_scenario_from_package  # noqa: E402
-from domains.wildfire.world_builder.regions import get_region  # noqa: E402
+# noqa: E402
+from config import get_settings  # noqa: E402
+from domains.wildfire.sampler import sample_local_conditions  # noqa: E402
+from domains.wildfire.scenario_loader import load_scenario_from_db  # noqa: E402
+from runtime import RuntimeOrchestrator  # noqa: E402
+from stores import get_mock_data_store  # noqa: E402
+from stores.base import DataStore  # noqa: E402
+from world.cell_state_manager import CellStateManager  # noqa: E402
 
 # Smoke-test cadence — fast enough that the demo finishes in a few
 # seconds, slow enough that publisher and consumer can interleave.
-SMOKE_TICKS = 3
+SMOKE_TICKS = 1
 SMOKE_TICK_INTERVAL_SEC = 0.05
 
+def build_agent_deps(
+    engine: GenericWorldEngine,
+    cell_state_manager: CellStateManager,
+    data_store: DataStore | None = None,
+) -> AgentDependencies:
+    """Construct the LLM/prompt/store dependencies for graph compilation."""
+    settings = get_settings()
+    settings.apply_langsmith()
+    store = None
 
-def print_world_summary(engine, sensor_inventory, region) -> None:
-    """One-shot summary of the loaded world before the loop starts."""
-    rows, cols = engine.grid.rows, engine.grid.cols
-    lat_mi, lon_mi = cell_size_miles(rows, cols, region.bounds)
+    return AgentDependencies(
+        world_engine=engine,
+        cell_state_manager=cell_state_manager,
+        store=store,
+        data_store=data_store,
+    )
+
+
+async def run_orchestrator(engine, sensor_inventory, cell_state_manager, agent_deps) -> None:
+    """Build the supervisor graph, construct the orchestrator, run it."""
+    supervisor_graph: SupervisorGraph = build_supervisor_graph(agent_dependencies=agent_deps)
+
+    orchestrator = RuntimeOrchestrator(
+        sensor_inventory=sensor_inventory,
+        engine=engine,
+        supervisor_graph=supervisor_graph,
+        cell_state_manager=cell_state_manager,
+        sampler=sample_local_conditions,
+        tick_interval_seconds=SMOKE_TICK_INTERVAL_SEC,
+        location_count=1
+    )
+
     print()
-    print(f"=== World loaded: {rows}x{cols} grid over {region.display_name} ===")
-    print(f"  Cell size: ~{lat_mi:.2f} mi (lat) × {lon_mi:.2f} mi (lon)")
+    print(f"=== Running orchestrator for {SMOKE_TICKS} tick(s) ===")
+    stats = await orchestrator.run(ticks=SMOKE_TICKS)
 
-    sensors_by_cluster: dict[str, int] = {c: 0 for c in region.clusters}
-    for sensor in sensor_inventory.all_sensors():
-        sensors_by_cluster[sensor.cluster_id] = (
-            sensors_by_cluster.get(sensor.cluster_id, 0) + 1
-        )
-    print(f"  Sensors:   {sum(sensors_by_cluster.values())} "
-          f"(from {len(region.raws_stations)} RAWS stations × 3 types each)")
-    for cluster, n in sensors_by_cluster.items():
-        print(f"    {cluster:24s} {n:3d}")
-
-
-
-def cluster_data():
-    """
-    Scenario
-    Two cells in two differt regions (clusters) have triggered.
-    As sensor readings come in from our sensors scattered across the park, they update the CollatedRecord that collects the last reading as a metric
-
-    At the "cluster-cuyama" station
-        Cell (1,4) has received readings for temperature, humidity, wind_speed, and wind_direction and stored them as "metrics"
-        This is enough data to require evaluation by our agent
-
-    At the "cluster-sb-coast" station
-        Cell (20,2) has also received complete readings for temperature, humidity, wind_speed, and wind_direction
-        and is also sent
-
-    """
-    return {
-        'cluster-cuyama': [
-            CollatedRecord(cluster_id='cluster-cuyama', triggered=True, position=GridPosition(row=1, col=4),
-                           window=TimeWindow(
-                               start=datetime.datetime(2026, 5, 7, 23, 7, 14, 488541, tzinfo=datetime.timezone.utc),
-                               end=datetime.datetime(2026, 5, 7, 23, 7, 14, 488680, tzinfo=datetime.timezone.utc),
-                               sim_tick_start=0,
-                               sim_tick_end=0), metrics=[
-                    Metric(type='temperature', value=90.9, signal_strength=0.2928932188134524,
-                           source_id='RAWS-CARRIZO-temp',
-                           position=GridPosition(row=2, col=5),
-                           timestamp=datetime.datetime(2026, 5, 7, 23, 7, 14, 488541, tzinfo=datetime.timezone.utc)),
-                    Metric(type='humidity', value=0.1, signal_strength=0.2928932188134524,
-                           source_id='RAWS-CARRIZO-humidity',
-                           position=GridPosition(row=2, col=5),
-                           timestamp=datetime.datetime(2026, 5, 7, 23, 7, 14, 488644, tzinfo=datetime.timezone.utc)),
-                    Metric(type='wind_speed', value=40, signal_strength=0.2928932188134524,
-                           source_id='RAWS-CARRIZO-wind',
-                           position=GridPosition(row=2, col=5),
-                           timestamp=datetime.datetime(2026, 5, 7, 23, 7, 14, 488680, tzinfo=datetime.timezone.utc)),
-                    Metric(type='wind_direction', value=49.9, signal_strength=0.2928932188134524,
-                           source_id='RAWS-CARRIZO-wind',
-                           position=GridPosition(row=2, col=5),
-                           timestamp=datetime.datetime(2026, 5, 7, 23, 7, 14, 488680, tzinfo=datetime.timezone.utc))],
-                           coverage=CoverageSummary(present=['temperature', 'humidity', 'wind_direction', 'wind_speed'],
-                                                    absent=[], strongest_signal=0.2928932188134524,
-                                                    weakest_signal=0.2928932188134524),
-                           terrain=TerrainContext(terrain_type='GRASSLAND', vegetation=0.3, fuel_moisture=0.08,
-                                                  slope=0.0)),
-        ],
-    'cluster-sb-coast': [
-            CollatedRecord(cluster_id='cluster-cuyama', triggered=True, position=GridPosition(row=20, col=2),
-                           window=TimeWindow(
-                               start=datetime.datetime(2026, 5, 7, 23, 7, 14, 488541, tzinfo=datetime.timezone.utc),
-                               end=datetime.datetime(2026, 5, 7, 23, 7, 14, 488680, tzinfo=datetime.timezone.utc),
-                               sim_tick_start=0,
-                               sim_tick_end=0), metrics=[
-                    Metric(type='temperature', value=24.9, signal_strength=0.2928932188134524,
-                           source_id='RAWS-SB-temp',
-                           position=GridPosition(row=2, col=5),
-                           timestamp=datetime.datetime(2026, 5, 7, 23, 7, 14, 488541, tzinfo=datetime.timezone.utc)),
-                    Metric(type='humidity', value=26.1, signal_strength=0.2928932188134524,
-                           source_id='RAWS-SB-humidity',
-                           position=GridPosition(row=2, col=5),
-                           timestamp=datetime.datetime(2026, 5, 7, 23, 7, 14, 488644, tzinfo=datetime.timezone.utc)),
-                    Metric(type='wind_speed', value=8.1, signal_strength=0.2928932188134524,
-                           source_id='RAWS-SB-wind',
-                           position=GridPosition(row=2, col=5),
-                           timestamp=datetime.datetime(2026, 5, 7, 23, 7, 14, 488680, tzinfo=datetime.timezone.utc)),
-                    Metric(type='wind_direction', value=49.9, signal_strength=0.2928932188134524,
-                           source_id='RAWS-SB-wind',
-                           position=GridPosition(row=2, col=5),
-                           timestamp=datetime.datetime(2026, 5, 7, 23, 7, 14, 488680, tzinfo=datetime.timezone.utc))],
-                           coverage=CoverageSummary(present=['temperature', 'humidity', 'wind_direction', 'wind_speed'],
-                                                    absent=[], strongest_signal=0.2928932188134524,
-                                                    weakest_signal=0.2928932188134524),
-                           terrain=TerrainContext(terrain_type='GRASSLAND', vegetation=0.3, fuel_moisture=0.08,
-                                                  slope=0.0)),
-        ]
-    }
+    print()
+    print("=== Run complete ===")
+    print(f"  ticks completed:           {stats.ticks_completed}")
+    print(f"  events consumed:           {stats.events_consumed}")
+    print(f"  CollatedRecords emitted:   {stats.records_emitted}")
+    print(f"  graph invocations:         {stats.graph_invocations}")
+    for cluster, n in stats.invocations_by_cluster.items():
+        print(f"    {cluster:24s}  invocations: {n:3d}")
+    print(f"  RiskAssessments produced:  {stats.risk_assessments_produced}")
+    if stats.cluster_score:
+        print("  Cluster risk scores (0–10):")
+        for cluster, score in sorted(stats.cluster_score.items()):
+            print(f"    {cluster:24s}  score: {score.risk_score:2d},  confidence: {score.confidence:2d}")
 
 
 def main() -> None:
-    print("GET WORLD")
-    region = get_region("lpnf-south")
-    engine, sensor_inventory, _ = load_scenario_from_package("lpnf-south")
+    data_store = get_mock_data_store()
+    try:
+        engine, sensor_inventory = load_scenario_from_db("lpnf-south", data_store)
+        cell_state_manager = CellStateManager(
+            world_grid=engine.grid,
+            sensor_inventory=sensor_inventory,
+        )
 
-    print_world_summary(engine, sensor_inventory, region)
-
-    print("\n\nINVOKE GRAPH")
-    supervisor_graph: SupervisorGraph = build_supervisor_graph()
-    initial_state = SupervisorState(clusters=cluster_data())
-    supervisor_graph.invoke(initial_state)
+        agent_dependencies = build_agent_deps(engine, cell_state_manager, data_store=data_store)
+        asyncio.run(run_orchestrator(engine, sensor_inventory, cell_state_manager, agent_dependencies))
+    finally:
+        data_store.close()
 
 
 if __name__ == "__main__":

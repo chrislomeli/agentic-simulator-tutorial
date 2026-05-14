@@ -44,7 +44,7 @@ import math
 import random
 from typing import Any
 
-from domains.wildfire.cell_state import FireCellState, FireState
+from domains.wildfire.cell_state import FireCellState, FireState, TerrainType
 from domains.wildfire.environment import FireEnvironmentState
 from domains.wildfire.fuel_models import FuelModel, get_fuel_model
 from world.generic_grid import GenericTerrainGrid
@@ -97,6 +97,101 @@ class RothermelFirePhysicsModule(PhysicsModule[FireCellState]):
         """Return the default cell state — unburned grassland."""
         return FireCellState()
 
+    def _evolve_cell_weather(
+        self,
+        grid: GenericTerrainGrid[FireCellState],
+        environment: FireEnvironmentState,
+    ) -> None:
+        """Evolve per-cell weather one tick.
+
+        Runs before fire spread so that fire physics uses fresh local weather.
+        Mutates cell_state in place (no StateEvents — weather is dense, every cell).
+
+        Algorithm per cell:
+          1. Mean reversion toward macro environment (20% pull per tick)
+          2. Local noise (bounded random drift)
+          3. Fire feedback: burning neighbors raise temperature, lower humidity
+          4. Terrain modifiers: ridges amplify wind, forests dampen wind,
+             water cells stay cool
+        """
+        # Pre-compute burning cells for fire feedback lookup
+        burning_set: set[tuple[int, int]] = set()
+        for r, c, _l in grid.cells_where(
+            lambda cell: cell.cell_state.fire_state == FireState.BURNING
+        ):
+            burning_set.add((r, c))
+
+        reversion_rate = 0.2  # how fast cells drift back toward macro
+
+        for r in range(grid.rows):
+            for c in range(grid.cols):
+                cell = grid.get_cell(r, c)
+                state = cell.cell_state
+
+                # ── 1. Mean reversion toward macro ─────────────────────
+                new_temp = state.temperature_c + reversion_rate * (
+                    environment.temperature_c - state.temperature_c
+                )
+                new_hum = state.humidity_pct + reversion_rate * (
+                    environment.humidity_pct - state.humidity_pct
+                )
+                new_wind = state.wind_speed_mps + reversion_rate * (
+                    environment.wind_speed_mps - state.wind_speed_mps
+                )
+                new_dir = state.wind_direction_deg + reversion_rate * (
+                    ((environment.wind_direction_deg - state.wind_direction_deg + 180) % 360) - 180
+                )
+                new_pressure = state.pressure_hpa + reversion_rate * (
+                    environment.pressure_hpa - state.pressure_hpa
+                )
+
+                # ── 2. Local noise ─────────────────────────────────────
+                new_temp += random.gauss(0, 0.3)
+                new_hum += random.gauss(0, 0.5)
+                new_wind += random.gauss(0, 0.2)
+                new_dir += random.gauss(0, 2.0)
+                new_pressure += random.gauss(0, 0.2)
+
+                # ── 3. Fire feedback ───────────────────────────────────
+                # Count burning neighbors (8-connected)
+                burning_neighbors = 0
+                for nr, nc, _nl in grid.neighbors(r, c):
+                    if (nr, nc) in burning_set:
+                        burning_neighbors += 1
+
+                if burning_neighbors > 0:
+                    # Each burning neighbor adds heat and dries the air
+                    new_temp += burning_neighbors * 2.0
+                    new_hum -= burning_neighbors * 3.0
+
+                # ── 4. Terrain modifiers ───────────────────────────────
+                if state.terrain_type == TerrainType.WATER:
+                    new_temp = min(new_temp, environment.temperature_c - 2.0)
+                    new_hum = max(new_hum, 60.0)
+                elif state.terrain_type == TerrainType.FOREST:
+                    new_wind *= 0.7  # canopy reduces wind
+                elif state.slope > 10.0:
+                    new_wind *= 1.2  # ridges accelerate wind
+
+                # ── Clamp to physical bounds ───────────────────────────
+                new_temp = max(-10.0, min(80.0, new_temp))
+                new_hum = max(3.0, min(100.0, new_hum))
+                new_wind = max(0.0, min(50.0, new_wind))
+                new_dir = new_dir % 360.0
+                new_pressure = max(950.0, min(1060.0, new_pressure))
+
+                # ── Write back (mutate in place) ───────────────────────
+                updated = state.model_copy(
+                    update={
+                        "temperature_c": round(new_temp, 1),
+                        "humidity_pct": round(new_hum, 1),
+                        "wind_speed_mps": round(new_wind, 1),
+                        "wind_direction_deg": round(new_dir, 1),
+                        "pressure_hpa": round(new_pressure, 1),
+                    }
+                )
+                grid.update_cell_state(r, c, updated)
+
     def tick_physics(
         self,
         grid: GenericTerrainGrid[FireCellState],
@@ -106,7 +201,8 @@ class RothermelFirePhysicsModule(PhysicsModule[FireCellState]):
         """
         Compute one tick of Rothermel fire spread.
 
-        For each burning cell:
+        Steps:
+          0. Evolve per-cell weather (mean reversion + noise + fire feedback).
           1. Compute heading ROS and derived metrics (flame length, intensity).
           2. Check burn duration — extinguish if exceeded (metrics zeroed).
           3. Otherwise update the cell's stored metrics (in-place StateEvent).
@@ -114,6 +210,9 @@ class RothermelFirePhysicsModule(PhysicsModule[FireCellState]):
              convert to spread probability, and roll.
           5. Ignited cells carry over the source cell's metrics at ignition.
         """
+        # ── 0. Evolve per-cell weather before fire spread ──────────
+        self._evolve_cell_weather(grid, environment)
+
         events: list[StateEvent[FireCellState]] = []
 
         wind_row, wind_col = environment.wind_vector()
@@ -307,16 +406,16 @@ class RothermelFirePhysicsModule(PhysicsModule[FireCellState]):
         Parameters
         ──────────
         fuel_model     : Fuel parameters for this terrain type
-        environment    : Current weather conditions
-        cell_state     : Per-cell state (slope, moisture)
+        environment    : Current weather conditions (macro — used for wind vector only)
+        cell_state     : Per-cell state (weather, slope, moisture)
         wind_alignment : Dot product of wind direction and spread direction.
                          1.0 = fully downwind (heading), 0.0 = cross-wind,
                          negative = backing. Only downwind component is used.
         """
-        # Unit conversions.
-        temp_f = environment.temperature_c * 9.0 / 5.0 + 32.0
-        rh = environment.humidity_pct
-        wind_mph = environment.wind_speed_mps * _MPS_TO_MPH
+        # Read weather from per-cell state (not global environment).
+        temp_f = cell_state.temperature_c * 9.0 / 5.0 + 32.0
+        rh = cell_state.humidity_pct
+        wind_mph = cell_state.wind_speed_mps * _MPS_TO_MPH
         slope_deg = abs(cell_state.slope)  # magnitude; direction handled by wind_alignment
 
         # RH factor: 60% = 0.0 (fire won't spread), 0% = 1.0 (fully amplified).

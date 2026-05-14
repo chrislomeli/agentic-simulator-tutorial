@@ -1,6 +1,7 @@
 """Tests for world-simiulator.domains.wildfire.sensors."""
 
 import random
+
 import pytest
 
 from domains.wildfire.sensors import (

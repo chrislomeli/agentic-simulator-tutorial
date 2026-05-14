@@ -78,7 +78,6 @@ class GenericTerrainGrid(Generic[C]):
             raise ValueError(f"Grid dimensions must be positive, got ({rows}, {cols}, {layers})")
         self.rows = rows
         self.cols = cols
-        self.layers = layers
         self._cells: list[list[list[GenericCell[C]]]] = [
             [
                 [
@@ -94,6 +93,7 @@ class GenericTerrainGrid(Generic[C]):
             ]
             for r in range(rows)
         ]
+        self.layers = layers
 
     def get_cell(self, row: int, col: int, layer: int = 0) -> GenericCell[C]:
         """
@@ -107,6 +107,47 @@ class GenericTerrainGrid(Generic[C]):
                 f"({self.rows}×{self.cols}×{self.layers})"
             )
         return self._cells[row][col][layer]
+
+    def register_layer(
+        self,
+        layer_id: str,
+        row: int,
+        col: int,
+        layer: int = 0,
+        warn: bool = True,
+    ) -> bool:
+        """Validate that a layer item (sensor, resource, etc.) fits within grid bounds.
+
+        This is the coordination point between the terrain grid and overlay layers.
+        Currently validates position only; extensible for future layer-grid interactions.
+
+        Parameters
+        ----------
+        layer_id : Identifier for the item (e.g., sensor.source_id)
+        row, col, layer : Position to validate
+        warn : If True, log a warning for out-of-bounds items
+
+        Returns
+        -------
+        True if position is valid and item can be registered, False otherwise
+        """
+        if not (0 <= row < self.rows and 0 <= col < self.cols and 0 <= layer < self.layers):
+            if warn:
+                import logging
+
+                logger = logging.getLogger(__name__)
+                logger.warning(
+                    "Layer item %s at (%d, %d, %d) outside grid bounds (%d×%d×%d)",
+                    layer_id,
+                    row,
+                    col,
+                    layer,
+                    self.rows,
+                    self.cols,
+                    self.layers,
+                )
+            return False
+        return True
 
     def neighbors(
         self,

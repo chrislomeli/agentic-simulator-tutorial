@@ -23,6 +23,7 @@ class TerrainType(StrEnum):
     ROCK = "ROCK"
     WATER = "WATER"
     URBAN = "URBAN"
+    SNOW = "SNOW"
 
 
 class FireState(StrEnum):
