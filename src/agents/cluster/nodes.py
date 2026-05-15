@@ -102,6 +102,7 @@ def make_update_world_state(
     """
 
     def update_world(state: ClusterAgentState):
+        print(f"{Colors.GREEN} NODE:: update_world{Colors.RESET}")
         readings: list[CellReadings] = state.readings
         grid = world_engine.grid
 
@@ -220,6 +221,7 @@ def make_evaluate_node(
           evaluated cell on the world grid.
 
         """
+        print(f"{Colors.GREEN} NODE:: evaluate{Colors.RESET}")
         cells = state.updated_cells
         cluster_id: str = state.cluster_id
 
@@ -287,6 +289,7 @@ def make_report_risk_node(world_engine: GenericWorldEngine, store: BaseStore | N
         ────────────
           - status : COMPLETED
         """
+        print(f"{Colors.GREEN} NODE:: report_risk{Colors.RESET}")
         assessments = state.risk_assessments
         cluster_id = state.cluster_id
         grid = world_engine.grid
