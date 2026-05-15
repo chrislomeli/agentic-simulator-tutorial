@@ -45,6 +45,9 @@ logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
+    # ── Database ───────────────────────────────────────────────────────────────
+    postgres_url: str = "postgresql://localhost:5432/wildfire"
+
     # ── LLM credentials ───────────────────────────────────────────────────────
     anthropic_api_key: SecretStr | None = None
     openai_api_key: SecretStr | None = None
