@@ -25,11 +25,11 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from domains.wildfire.cell_state import FireCellState, TerrainType  # noqa: E402
-from domains.wildfire.environment import FireEnvironmentState  # noqa: E402
-from domains.wildfire.physics import SimpleFirePhysicsModule  # noqa: E402
-from domains.wildfire.sensors import HumiditySensor, TemperatureSensor, WindSensor  # noqa: E402
-from transport.schemas import SensorEvent  # noqa: E402
+from world.domains.wildfire.cell_state import FireCellState, TerrainType  # noqa: E402
+from world.domains.wildfire.environment import FireEnvironmentState  # noqa: E402
+from world.domains.wildfire.physics import SimpleFirePhysicsModule  # noqa: E402
+from world.domains.wildfire.sensors import HumiditySensor, TemperatureSensor, WindSensor  # noqa: E402
+from world.transport import SensorEvent  # noqa: E402
 from world.cell_state_manager import (  # noqa: E402
     CellStateManager,
     EvaluationThresholds,

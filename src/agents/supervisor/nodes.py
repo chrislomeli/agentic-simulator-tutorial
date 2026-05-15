@@ -16,14 +16,14 @@ subgraph, a LangGraph ``BaseStore``) are exposed as ``make_*``
 factories so the graph builder can thread dependencies in at compile
 time. This keeps the module free of side effects at import time.
 """
-import json
+
 import logging
 
 from langgraph.store.base import BaseStore
 
 from agents.commons.schemas import CellReadings, CollatedRecordRisk, Colors
 from agents.commons.state_types import StatusValue
-from agents.supervisor.state import SupervisorState, RiskScore
+from agents.supervisor.state import RiskScore, SupervisorState
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ def fan_out_to_clusters(state: SupervisorState) :
     ``cluster_score`` and ``cluster_findings``.
     """
     print(f"{Colors.GREEN} NODE:: fan_out_to_clusters{Colors.RESET}")
-    clusters = state.clusters
+    clusters: dict[str, list[CellReadings]] = state.clusters
     cluster_ids = list(clusters.keys())
     logger.info(
         "Supervisor looping for %d cluster(s): %s",
@@ -87,7 +87,9 @@ def assess_situation(state: SupervisorState) -> dict:
     print(f"{Colors.GREEN} NODE:: assess_situation{Colors.RESET}")
     cluster_ids = list(state.clusters.keys())
 
-    summary = f"""processed clusters:: {json.dumps(cluster_ids)}\n"""
+    summary = (
+        f"[STUB] Received findings from cluster(s) ({len(cluster_ids)} active)."
+    )
 
     return {
         "situation_summary": summary,
@@ -105,7 +107,6 @@ def decide_actions(state: SupervisorState) -> dict:
         "pending_commands": [],
         "status": StatusValue.PROCESSING,
     }
-
 
 
 def make_dispatch_commands(store: BaseStore | None = None):
