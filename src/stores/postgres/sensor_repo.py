@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import logging
 
-from domains.wildfire.sensors import (
+from stores.base import SensorRepository as SensorRepositoryBase
+from stores.postgres.gateway import PgGateway
+from stores.schemas import Sensor
+from world.domains.wildfire.sensors import (
     BarometricSensor,
     HumiditySensor,
     SmokeSensor,
@@ -12,11 +15,8 @@ from domains.wildfire.sensors import (
     ThermalCameraSensor,
     WindSensor,
 )
-from sensors.base import SensorBase
-from stores.base import SensorRepository as SensorRepositoryBase
-from stores.postgres.gateway import PgGateway
-from stores.schemas import Sensor
 from world.sensor_inventory import SensorInventory
+from world.sensors.base import SensorBase
 
 logger = logging.getLogger(__name__)
 

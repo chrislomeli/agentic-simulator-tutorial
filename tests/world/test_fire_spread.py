@@ -4,8 +4,8 @@ import random
 
 import pytest
 
-from domains.wildfire import FireCellState, FirePhysicsModule, FireState, TerrainType
-from domains.wildfire.environment import FireEnvironmentState
+from world.domains.wildfire import FireCellState, FirePhysicsModule, FireState, TerrainType
+from world.domains.wildfire.environment import FireEnvironmentState
 from world import PhysicsModule, StateEvent
 from world.generic_grid import GenericTerrainGrid
 

@@ -6,10 +6,10 @@ import json
 import logging
 from pathlib import Path
 
-from domains.wildfire.cell_state import FireCellState, TerrainType
 from stores.base import TerrainConfig
 from stores.base import TerrainRepository as TerrainRepositoryBase
 from stores.schemas import Terrain
+from world.domains.wildfire.cell_state import FireCellState, TerrainType
 
 logger = logging.getLogger(__name__)
 

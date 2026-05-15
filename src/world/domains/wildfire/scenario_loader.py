@@ -39,9 +39,9 @@ from agents.commons.geo import (
     cell_size_miles,
     grid_to_latlon,
 )
-from domains.wildfire.cell_state import FireCellState, TerrainType
-from domains.wildfire.environment import FireEnvironmentState
 from stores.base import DataStore
+from world.domains.wildfire.cell_state import FireCellState, TerrainType
+from world.domains.wildfire.environment import FireEnvironmentState
 from world.generic_engine import GenericWorldEngine
 from world.generic_grid import GenericTerrainGrid
 from world.sensor_inventory import SensorInventory
@@ -140,7 +140,7 @@ def load_scenario_from_db(
     burn_duration_ticks = terrain_config.burn_duration_ticks or _DEFAULT_BURN_DURATION_TICKS
 
     if use_rothermel:
-        from domains.wildfire.rothermel_physics import RothermelFirePhysicsModule
+        from world.domains.wildfire.rothermel_physics import RothermelFirePhysicsModule
 
         physics = RothermelFirePhysicsModule(
             cell_size_ft=cell_size_ft,
@@ -148,7 +148,7 @@ def load_scenario_from_db(
             burn_duration_ticks=burn_duration_ticks,
         )
     else:
-        from domains.wildfire.physics import SimpleFirePhysicsModule
+        from world.domains.wildfire.physics import SimpleFirePhysicsModule
 
         physics = SimpleFirePhysicsModule(
             base_probability=0.15,

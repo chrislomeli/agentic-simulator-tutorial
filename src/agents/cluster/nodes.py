@@ -32,12 +32,9 @@ Design principles
 
 from __future__ import annotations
 
-import asyncio
-import json
 import logging
 from typing import NamedTuple
 
-from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.store.base import BaseStore
 
 from agents.cluster.state import ClusterAgentState
@@ -47,12 +44,13 @@ from agents.commons.schemas import (
     CellReadings,
     CellRiskAssessment,
     CollatedRecordRisk,
-    GridPosition, Colors,
+    Colors,
+    GridPosition,
 )
 from agents.commons.state_types import StatusValue
-from domains.wildfire import FireCellState
 from world import GenericCell, GenericWorldEngine
 from world.cell_state_manager import CellStateManager
+from world.domains.wildfire import FireCellState
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +99,7 @@ def make_update_world_state(
 
     The list of cell dicts is what the evaluate node hands to the LLM.
     """
+
     @node_executor("update_world")
     def update_world(state: ClusterAgentState):
         readings: list[CellReadings] = state.readings
