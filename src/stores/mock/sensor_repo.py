@@ -35,7 +35,6 @@ _SENSOR_TYPE_MAP: dict[str, type[SensorBase]] = {
 
 
 class MockSensorRepository(SensorRepositoryBase):
-
     def fetch_sensors(
         self,
         region_name: str,
@@ -78,7 +77,11 @@ class MockSensorRepository(SensorRepositoryBase):
 
         sensor_class = _SENSOR_TYPE_MAP.get(record.sensor_type.lower())
         if not sensor_class:
-            logger.warning("Mock: unknown sensor_type %r for %s, skipping", record.sensor_type, record.sensor_id)
+            logger.warning(
+                "Mock: unknown sensor_type %r for %s, skipping",
+                record.sensor_type,
+                record.sensor_id,
+            )
             return None
 
         kwargs: dict = {
