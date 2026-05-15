@@ -41,7 +41,8 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.store.base import BaseStore
 
 from agents.cluster.state import ClusterAgentState
-
+from agents.commons.node_executor import node_executor
+from agents.commons.routing import route_base
 from agents.commons.schemas import (
     CellReadings,
     CellRiskAssessment,
@@ -50,6 +51,7 @@ from agents.commons.schemas import (
 )
 from agents.commons.state_types import StatusValue
 from domains.wildfire import FireCellState
+from prompts import PromptRegistry
 from world import GenericCell, GenericWorldEngine
 from world.cell_state_manager import CellStateManager
 
@@ -100,9 +102,8 @@ def make_update_world_state(
 
     The list of cell dicts is what the evaluate node hands to the LLM.
     """
-
+    @node_executor("update_world")
     def update_world(state: ClusterAgentState):
-        print(f"{Colors.GREEN} NODE:: update_world{Colors.RESET}")
         readings: list[CellReadings] = state.readings
         grid = world_engine.grid
 
@@ -194,6 +195,7 @@ def make_evaluate_node(
         in ``world_engine.grid``.
     """
 
+    @node_executor("evaluate")
     async def evaluate(state: ClusterAgentState, max_concurrency: int = 3) -> dict:
         """Evaluate fire risk for every cell snapshot in this cluster.
 
@@ -277,6 +279,7 @@ def make_report_risk_node(world_engine: GenericWorldEngine, store: BaseStore | N
         ``"{row}_{col}"`` for retrieval by the supervisor or a dashboard.
     """
 
+    @node_executor("report_risk")
     def report_risk(state: ClusterAgentState) -> dict:
         """Terminal node — persists risk assessments and marks pipeline complete.
 
@@ -289,7 +292,6 @@ def make_report_risk_node(world_engine: GenericWorldEngine, store: BaseStore | N
         ────────────
           - status : COMPLETED
         """
-        print(f"{Colors.GREEN} NODE:: report_risk{Colors.RESET}")
         assessments = state.risk_assessments
         cluster_id = state.cluster_id
         grid = world_engine.grid
@@ -346,4 +348,4 @@ def route_after_evaluate(state: ClusterAgentState) -> str:
       - status == COMPLETED → END
       - otherwise           → "report_risk"
     """
-    return "report_risk"
+    return route_base(state, next_node="report_risk")

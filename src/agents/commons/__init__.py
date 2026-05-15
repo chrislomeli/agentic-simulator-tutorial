@@ -30,6 +30,10 @@ Quick reference:
 # import AgentDependencies directly from agents.commons.agent_dependencies.
 from agents.commons.geo import LatLon, cell_size_miles, grid_to_latlon, latlon_to_grid
 
+# Layer 4: infrastructure
+from agents.commons.node_executor import node_executor
+from agents.commons.node_types import NodeError
+from agents.commons.routing import route_base
 
 # Layer 3: schemas (depends on state_types)
 from agents.commons.schemas import (
@@ -57,4 +61,7 @@ __all__ = [
     "CellReadings",
     "CollatedRecordRisk",
     "RiskAssessment",
+    "NodeError",
+    "node_executor",
+    "route_base",
 ]

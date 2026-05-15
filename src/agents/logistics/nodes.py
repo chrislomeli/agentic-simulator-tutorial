@@ -31,7 +31,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 from langgraph.graph import END
 from pydantic import BaseModel, Field
 
-
+from agents.commons.node_executor import node_executor
 from agents.commons.schemas import Direction, SECTOR_ANGLES, SECTOR_VECTORS, Colors
 from agents.commons.state_types import StatusValue
 from agents.logistics.state import LogisticsAgentState
@@ -258,9 +258,9 @@ def make_sector_analysis_node(
     cell_size_ft = getattr(world_engine.physics, "cell_size_ft", 200.0)
     max_cells = int((max_sector_miles * 5280) / cell_size_ft)
 
+    @node_executor("sector_analysis")
     def sector_analysis(state: LogisticsAgentState) -> dict:
         """Analyze radial sectors around high-risk hotspots."""
-        print(f"{Colors.GREEN} NODE:: sector_analysis{Colors.RESET}")
         from agents.commons.schemas import CellRiskAssessment
 
         hotspots = []
@@ -350,6 +350,7 @@ def make_logistics_agent_node():
     llm_registry : Registry for looking up the LLM. May be None in stub mode.
     """
 
+    @node_executor("logistics_agent")
     def logistics_agent(state: LogisticsAgentState) -> dict:
         """Call the LLM with tools bound, or return a stub response.
 
@@ -358,7 +359,6 @@ def make_logistics_agent_node():
         calls (after tool results), the accumulated messages are passed as-is —
         LangGraph's add_messages reducer has already appended the ToolMessages.
         """
-        print(f"""\n{Colors.GREEN}● NODE:: logistics_agent {Colors.RESET}""")
         print(f"""{Colors.YELLOW}● NOT CALLING LOGISTICS LLM - Determines equipment and crew availability and issues advisories)  {Colors.RESET}""")
         response = "Logistics LLM STUB"
         logger.info(
@@ -408,7 +408,7 @@ def make_extract_plan_node():
     If the 'logistics' LLM role is not registered (e.g. in tests), the
     assessment is skipped and logistics_assessment is left as None.
     """
-
+    @node_executor("extract_plan")
     def extract_logistics_plan(state: LogisticsAgentState) -> dict:
         """Terminal node — lift the LLM's final text and extract structured assessment.
 
@@ -421,7 +421,6 @@ def make_extract_plan_node():
         data_gaps is the branching signal: empty = agent had what it needed;
         non-empty = upstream should consider widening search or escalating.
         """
-        print(f"""\n{Colors.GREEN}● NODE:: extract_logistics_plan {Colors.RESET}""")
         last = state.messages[-1] if state.messages else None
         plan = last.content if last else "[No plan produced]"
         logger.info("Logistics plan extracted (%d chars)", len(plan))

@@ -75,6 +75,7 @@ def build_cluster_agent_graph(
     builder.add_node(
         "evaluate",
         make_evaluate_node(
+            prompt_registry=agent_deps.prompt_registry,
             world_engine=agent_deps.world_engine,
         ),
     )

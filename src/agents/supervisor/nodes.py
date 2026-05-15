@@ -24,6 +24,7 @@ from langgraph.store.base import BaseStore
 from langgraph.types import Send
 
 from agents.cluster.state import ClusterAgentState
+from agents.commons import node_executor
 from agents.commons.schemas import CellReadings, CollatedRecordRisk, Colors
 from agents.commons.state_types import StatusValue
 from agents.logistics.state import LogisticsAgentState
@@ -34,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 # ── Conditional edge: dynamic fan-out ────────────────────────────────────────
 
-
+@node_executor("fan_out_to_clusters")
 def fan_out_to_clusters(state: SupervisorState) -> list[Send]:
     """Dynamic fan-out — one ``Send`` per active cluster.
 
@@ -49,7 +50,6 @@ def fan_out_to_clusters(state: SupervisorState) -> list[Send]:
     LangGraph advances to ``assess_situation`` with the accumulated
     ``cluster_score`` and ``cluster_findings``.
     """
-    print(f"{Colors.GREEN} NODE:: fan_out_to_clusters{Colors.RESET}")
     clusters: dict[str, list[CellReadings]] = state.clusters
     cluster_ids = list(clusters.keys())
     logger.info(
@@ -86,8 +86,8 @@ def make_run_cluster_agent(cluster_graph: CompiledStateGraph):
     Both fields use reducers so parallel sends merge cleanly.
     """
 
+    @node_executor("run_cluster_agent")
     async def run_cluster_agent(state: ClusterAgentState) -> dict:
-        print(f"{Colors.GREEN} NODE:: run_cluster_agent{Colors.RESET}")
         cluster_id = state.cluster_id
         logger.info("Supervisor invoking cluster agent for cluster=%s", cluster_id)
 
@@ -110,6 +110,7 @@ def make_run_cluster_agent(cluster_graph: CompiledStateGraph):
 # ── Stub nodes (the supervisor's own steps) ──────────────────────────────────
 
 
+@node_executor("assess_situation")
 def assess_situation(state: SupervisorState) -> dict:
     """Stub assessor — produces a placeholder situation summary.
 
@@ -117,7 +118,6 @@ def assess_situation(state: SupervisorState) -> dict:
     Store, call an LLM to correlate findings across clusters, and detect
     cross-cluster patterns (e.g. one large event vs many isolated ones).
     """
-    print(f"{Colors.GREEN} NODE:: assess_situation{Colors.RESET}")
     findings = state.cluster_findings
     cluster_ids = list(state.clusters.keys())
 
@@ -131,6 +131,7 @@ def assess_situation(state: SupervisorState) -> dict:
     }
 
 
+@node_executor("decide_actions")
 def decide_actions(state: SupervisorState) -> dict:
     """Stub decider — returns no commands.
 
@@ -151,8 +152,8 @@ def make_run_logistics_agent(logistics_graph: CompiledStateGraph):
     resulting plan back into supervisor state.
     """
 
+    @node_executor("run_logistics_agent")
     def run_logistics_agent(state: SupervisorState) -> dict:
-        print(f"{Colors.GREEN} NODE:: run_logistics_agent{Colors.RESET}")
         logistics_state = LogisticsAgentState(
             situation_summary=state.situation_summary or "",
             cluster_findings=state.cluster_findings,
@@ -175,8 +176,8 @@ def make_dispatch_commands(store: BaseStore | None = None):
     long-term memory once that capability is wired in. Stub mode ignores it.
     """
 
+    @node_executor("dispatch_commands")
     def dispatch_commands(state: SupervisorState) -> dict:
-        print(f"{Colors.GREEN} NODE:: dispatch_commands{Colors.RESET}")
         commands = state.pending_commands
         logger.info("Supervisor dispatching %d command(s)", len(commands))
 
@@ -242,4 +243,4 @@ def route_after_decide(state: SupervisorState) -> str:
       - status == COMPLETED → END
       - otherwise           → "dispatch_commands"
     """
-    return "dispatch_commands"
+    return route_base(state, next_node="dispatch_commands")
