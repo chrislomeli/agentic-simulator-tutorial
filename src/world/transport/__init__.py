@@ -11,8 +11,8 @@ Nothing in this package knows about LangGraph, sensors, or actuators.
 It is pure data contract + naming conventions.
 """
 
-from transport.queue import SensorEventQueue as SensorEventQueue
-from transport.schemas import SensorEvent as SensorEvent
+from world.transport.queue import SensorEventQueue as SensorEventQueue
+from world.transport.schemas import SensorEvent as SensorEvent
 
 __all__ = [
     "SensorEventQueue",

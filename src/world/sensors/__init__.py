@@ -16,9 +16,9 @@ Keeping I/O out of the sensor class makes it easy to test without a
 running Kafka broker.
 """
 
-from sensors.base import FailureMode as FailureMode
-from sensors.base import SensorBase as SensorBase
-from sensors.publisher import SensorPublisher as SensorPublisher
+from world.sensors.base import FailureMode as FailureMode
+from world.sensors.base import SensorBase as SensorBase
+from world.sensors.publisher import SensorPublisher as SensorPublisher
 
 __all__ = [
     "FailureMode",

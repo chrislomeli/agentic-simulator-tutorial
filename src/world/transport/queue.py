@@ -45,7 +45,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from transport.schemas import SensorEvent
+from world.transport.schemas import SensorEvent
 
 logger = logging.getLogger(__name__)
 

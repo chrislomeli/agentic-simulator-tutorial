@@ -33,8 +33,8 @@ from __future__ import annotations
 import logging
 import random
 
-from sensors.base import FailureMode, SensorBase
-from transport.schemas import SensorEvent
+from world.sensors.base import FailureMode, SensorBase
+from world.transport import SensorEvent
 
 logger = logging.getLogger(__name__)
 

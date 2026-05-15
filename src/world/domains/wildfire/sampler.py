@@ -23,8 +23,8 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from domains.wildfire.cell_state import FireCellState, FireState
-from domains.wildfire.environment import FireEnvironmentState
+from world.domains.wildfire.cell_state import FireCellState, FireState
+from world.domains.wildfire.environment import FireEnvironmentState
 from world.generic_engine import GenericWorldEngine
 
 

@@ -2,7 +2,7 @@
 
 import pytest
 
-from domains.wildfire import FireCellState, FirePhysicsModule, FireState, TerrainType
+from world.domains.wildfire import FireCellState, FirePhysicsModule, FireState, TerrainType
 from world.generic_grid import GenericTerrainGrid
 
 
