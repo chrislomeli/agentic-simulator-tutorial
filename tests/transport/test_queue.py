@@ -4,8 +4,7 @@ import asyncio
 
 import pytest
 
-from transport import SensorEventQueue
-from transport import SensorEvent
+from transport import SensorEvent, SensorEventQueue
 
 
 @pytest.fixture

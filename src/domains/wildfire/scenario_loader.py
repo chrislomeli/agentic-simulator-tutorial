@@ -41,14 +41,10 @@ from agents.commons.geo import (
 )
 from domains.wildfire.cell_state import FireCellState, TerrainType
 from domains.wildfire.environment import FireEnvironmentState
-from world import GenericWorldEngine, SensorInventory
+from stores.base import DataStore
 from world.generic_engine import GenericWorldEngine
 from world.generic_grid import GenericTerrainGrid
 from world.sensor_inventory import SensorInventory
-from stores.pg_gateway import PgGateway
-from stores.sensor_repo import SensorRepository
-from stores.terrain_repo import TerrainRepository
-
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +70,7 @@ _DEFAULT_ENVIRONMENT = dict(
 
 def load_scenario_from_db(
     region_name: str,
-    pg_gateway: PgGateway,
+    data_store: DataStore,
     bounds: dict = LPNF_SOUTH,
     ignition_points: list[dict[str, Any]] | None = None,
     layers: int = 1,
@@ -86,7 +82,7 @@ def load_scenario_from_db(
     Parameters
     ──────────
     region_name      : DB region key (e.g. 'lpnf-south').
-    pg_gateway       : Open PgGateway connection.
+    data_store       : Open DataStore (Postgres-backed today).
     bounds           : Geographic bounding box used as a fallback for cells
                        not in the DB.  Defaults to southern Los Padres NF.
     ignition_points  : Optional list of dicts with keys row, col, layer
@@ -107,7 +103,7 @@ def load_scenario_from_db(
     ignition_points = ignition_points or []
 
     # ── Load terrain from DB ─────────────────────────────────────
-    terrain_repo = TerrainRepository(pg_gateway)
+    terrain_repo = data_store.terrain
     terrain_dict, terrain_config = terrain_repo.fetch_terrain(region_name)
 
     if not terrain_dict:
@@ -194,7 +190,7 @@ def load_scenario_from_db(
     environment = FireEnvironmentState(**_DEFAULT_ENVIRONMENT)
 
     # ── Load sensors from DB ─────────────────────────────────────
-    sensor_repo = SensorRepository(pg_gateway)
+    sensor_repo = data_store.sensors
     all_sensors = sensor_repo.fetch_sensors(
         region_name=region_name,
         grid_rows=rows,
@@ -253,7 +249,7 @@ def load_scenario_from_db(
 
 
 def load_scenario_from_package(
-    pg_gateway: PgGateway,
+    data_store: DataStore,
     region_name: str = "lpnf-south",
     bounds: dict = LPNF_SOUTH,
     ignition_points: list[dict[str, Any]] | None = None,
@@ -263,7 +259,7 @@ def load_scenario_from_package(
 
     Parameters
     ──────────
-    pg_gateway      : Open PgGateway connection.
+    data_store      : Open DataStore (Postgres-backed today).
     region_name     : DB region key (default 'lpnf-south').
     bounds          : Geographic bounding box fallback.
     ignition_points : Optional ignition list (see load_scenario_from_db).
@@ -274,7 +270,7 @@ def load_scenario_from_package(
     """
     return load_scenario_from_db(
         region_name=region_name,
-        pg_gateway=pg_gateway,
+        data_store=data_store,
         bounds=bounds,
         ignition_points=ignition_points,
     )

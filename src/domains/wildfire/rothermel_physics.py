@@ -116,7 +116,9 @@ class RothermelFirePhysicsModule(PhysicsModule[FireCellState]):
         """
         # Pre-compute burning cells for fire feedback lookup
         burning_set: set[tuple[int, int]] = set()
-        for r, c, _l in grid.cells_where(lambda cell: cell.cell_state.fire_state == FireState.BURNING):
+        for r, c, _l in grid.cells_where(
+            lambda cell: cell.cell_state.fire_state == FireState.BURNING
+        ):
             burning_set.add((r, c))
 
         reversion_rate = 0.2  # how fast cells drift back toward macro
@@ -127,13 +129,21 @@ class RothermelFirePhysicsModule(PhysicsModule[FireCellState]):
                 state = cell.cell_state
 
                 # ── 1. Mean reversion toward macro ─────────────────────
-                new_temp = state.temperature_c + reversion_rate * (environment.temperature_c - state.temperature_c)
-                new_hum = state.humidity_pct + reversion_rate * (environment.humidity_pct - state.humidity_pct)
-                new_wind = state.wind_speed_mps + reversion_rate * (environment.wind_speed_mps - state.wind_speed_mps)
+                new_temp = state.temperature_c + reversion_rate * (
+                    environment.temperature_c - state.temperature_c
+                )
+                new_hum = state.humidity_pct + reversion_rate * (
+                    environment.humidity_pct - state.humidity_pct
+                )
+                new_wind = state.wind_speed_mps + reversion_rate * (
+                    environment.wind_speed_mps - state.wind_speed_mps
+                )
                 new_dir = state.wind_direction_deg + reversion_rate * (
                     ((environment.wind_direction_deg - state.wind_direction_deg + 180) % 360) - 180
                 )
-                new_pressure = state.pressure_hpa + reversion_rate * (environment.pressure_hpa - state.pressure_hpa)
+                new_pressure = state.pressure_hpa + reversion_rate * (
+                    environment.pressure_hpa - state.pressure_hpa
+                )
 
                 # ── 2. Local noise ─────────────────────────────────────
                 new_temp += random.gauss(0, 0.3)
@@ -171,13 +181,15 @@ class RothermelFirePhysicsModule(PhysicsModule[FireCellState]):
                 new_pressure = max(950.0, min(1060.0, new_pressure))
 
                 # ── Write back (mutate in place) ───────────────────────
-                updated = state.model_copy(update={
-                    "temperature_c": round(new_temp, 1),
-                    "humidity_pct": round(new_hum, 1),
-                    "wind_speed_mps": round(new_wind, 1),
-                    "wind_direction_deg": round(new_dir, 1),
-                    "pressure_hpa": round(new_pressure, 1),
-                })
+                updated = state.model_copy(
+                    update={
+                        "temperature_c": round(new_temp, 1),
+                        "humidity_pct": round(new_hum, 1),
+                        "wind_speed_mps": round(new_wind, 1),
+                        "wind_direction_deg": round(new_dir, 1),
+                        "pressure_hpa": round(new_pressure, 1),
+                    }
+                )
                 grid.update_cell_state(r, c, updated)
 
     def tick_physics(

@@ -5,7 +5,6 @@ import pytest
 from domains.wildfire.nwcg_resources import (
     INTENSITY_THRESHOLDS,
     NWCG_CATALOG,
-    NWCGResourceSpec,
     get_by_id,
     get_by_kind,
     suppression_category,

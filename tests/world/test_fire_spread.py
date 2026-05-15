@@ -1,14 +1,13 @@
 """Tests for FirePhysicsModule — spread logic, burn duration, probability factors."""
 
 import random
+
 import pytest
 
-from domains.wildfire import FireCellState, FireState, TerrainType
+from domains.wildfire import FireCellState, FirePhysicsModule, FireState, TerrainType
 from domains.wildfire.environment import FireEnvironmentState
-from domains.wildfire import FirePhysicsModule
+from world import PhysicsModule, StateEvent
 from world.generic_grid import GenericTerrainGrid
-from world import StateEvent, PhysicsModule
-
 
 # ── Interface tests ──────────────────────────────────────────────────────────
 

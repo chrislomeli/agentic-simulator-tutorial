@@ -1,14 +1,18 @@
 """Tests for world-simiulator.world.generic_engine — GenericWorldEngine."""
 
+from typing import Any
+
 import pytest
-from typing import Any, Dict, List
 
+from world import (
+    EnvironmentState,
+    GenericGroundTruthSnapshot,
+    GenericWorldEngine,
+    PhysicsModule,
+    StateEvent,
+)
 from world.cell_state import CellState
-from world import EnvironmentState
-from world import GenericGroundTruthSnapshot, GenericWorldEngine
 from world.generic_grid import GenericTerrainGrid
-from world import PhysicsModule, StateEvent
-
 
 # ── Toy domain for testing the engine ────────────────────────────────────────
 # A trivial "heat" domain: cells have a temperature, the physics module
@@ -33,7 +37,7 @@ class HeatEnvironment(EnvironmentState):
     def tick(self) -> None:
         self.ambient_temp += 1.0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {"ambient_temp": self.ambient_temp}
 
 
@@ -51,7 +55,7 @@ class HeatPhysics(PhysicsModule[HeatCellState]):
         grid: GenericTerrainGrid[HeatCellState],
         environment: HeatEnvironment,
         tick: int,
-    ) -> List[StateEvent[HeatCellState]]:
+    ) -> list[StateEvent[HeatCellState]]:
         events = []
         for cell in grid.iter_cells():
             if cell.cell_state.temperature > 0:
@@ -67,7 +71,7 @@ class HeatPhysics(PhysicsModule[HeatCellState]):
                         ))
         return events
 
-    def summarize(self, grid: GenericTerrainGrid[HeatCellState]) -> Dict[str, Any]:
+    def summarize(self, grid: GenericTerrainGrid[HeatCellState]) -> dict[str, Any]:
         hot = 0
         warm = 0
         for cell in grid.iter_cells():

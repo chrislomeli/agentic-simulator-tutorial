@@ -4,7 +4,6 @@ import pytest
 
 from world.cell_state import CellState, GenericCell
 
-
 # ── Test CellState subclass ──────────────────────────────────────────────────
 
 class DummyCellState(CellState):

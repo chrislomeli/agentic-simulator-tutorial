@@ -10,9 +10,9 @@ import pytest
 
 pytest.skip("Pending Chunk 3 trend accessor on CellStateManager", allow_module_level=True)
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta  # noqa: E402
 
-from world.trend_analyzer import TrendAnalyzer, TREND_THRESHOLDS
+from world.trend_analyzer import TREND_THRESHOLDS, TrendAnalyzer  # noqa: E402
 
 
 class TestTrendAnalyzerBuffer:

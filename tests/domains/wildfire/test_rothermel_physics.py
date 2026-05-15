@@ -1,6 +1,5 @@
 """Tests for world-simiulator.domains.wildfire.rothermel_physics."""
 
-import math
 import random
 
 import pytest
