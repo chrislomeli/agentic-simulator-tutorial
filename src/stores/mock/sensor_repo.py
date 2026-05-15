@@ -6,7 +6,9 @@ import json
 import logging
 from pathlib import Path
 
-from domains.wildfire.sensors import (
+from stores.base import SensorRepository as SensorRepositoryBase
+from stores.schemas import Sensor
+from world.domains.wildfire.sensors import (
     BarometricSensor,
     HumiditySensor,
     SmokeSensor,
@@ -14,10 +16,8 @@ from domains.wildfire.sensors import (
     ThermalCameraSensor,
     WindSensor,
 )
-from sensors.base import SensorBase
-from stores.base import SensorRepository as SensorRepositoryBase
-from stores.schemas import Sensor
 from world.sensor_inventory import SensorInventory
+from world.sensors.base import SensorBase
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,6 @@ _SENSOR_TYPE_MAP: dict[str, type[SensorBase]] = {
 
 
 class MockSensorRepository(SensorRepositoryBase):
-
     def fetch_sensors(
         self,
         region_name: str,
@@ -78,7 +77,11 @@ class MockSensorRepository(SensorRepositoryBase):
 
         sensor_class = _SENSOR_TYPE_MAP.get(record.sensor_type.lower())
         if not sensor_class:
-            logger.warning("Mock: unknown sensor_type %r for %s, skipping", record.sensor_type, record.sensor_id)
+            logger.warning(
+                "Mock: unknown sensor_type %r for %s, skipping",
+                record.sensor_type,
+                record.sensor_id,
+            )
             return None
 
         kwargs: dict = {

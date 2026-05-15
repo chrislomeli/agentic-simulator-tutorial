@@ -34,9 +34,9 @@ from agents.commons.state_types import StatusValue
 from agents.logistics.state import LogisticsAgentState
 from prompts import PromptRegistry
 from world import (
+    SECTOR_VECTORS,
     GenericWorldEngine,
     HotspotSectors,
-    SECTOR_VECTORS,
     analyze_sector,
     trace_sector,
 )

@@ -29,7 +29,6 @@ def _load() -> list[WildfireActivity]:
 
 
 class MockWildfireRepository(WildfireRepositoryBase):
-
     def fetch_similar_fires(
         self,
         min_acres: int,
@@ -38,7 +37,8 @@ class MockWildfireRepository(WildfireRepositoryBase):
     ) -> list[WildfireActivity]:
         logger.info("Mock: fetching fires between %d and %d acres", min_acres, max_acres)
         results = [
-            r for r in _load()
+            r
+            for r in _load()
             if r.fire_size_acres is not None and min_acres <= r.fire_size_acres <= max_acres
         ]
         # Sort most-recent first (imsr_date descending)
@@ -49,10 +49,7 @@ class MockWildfireRepository(WildfireRepositoryBase):
 
     def fetch_by_fire_name(self, fire_name: str, limit: int = 5) -> list[WildfireActivity]:
         needle = fire_name.lower()
-        results = [
-            r for r in _load()
-            if r.fire_name and needle in r.fire_name.lower()
-        ]
+        results = [r for r in _load() if r.fire_name and needle in r.fire_name.lower()]
         results.sort(key=lambda r: r.imsr_date or "0000-00-00", reverse=True)
         results = results[:limit]
         logger.info("Mock: found %d fires matching %r", len(results), fire_name)

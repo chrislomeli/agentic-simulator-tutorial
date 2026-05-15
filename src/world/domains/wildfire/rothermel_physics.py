@@ -44,9 +44,9 @@ import math
 import random
 from typing import Any
 
-from domains.wildfire.cell_state import FireCellState, FireState, TerrainType
-from domains.wildfire.environment import FireEnvironmentState
-from domains.wildfire.fuel_models import FuelModel, get_fuel_model
+from world.domains.wildfire.cell_state import FireCellState, FireState, TerrainType
+from world.domains.wildfire.environment import FireEnvironmentState
+from world.domains.wildfire.fuel_models import FuelModel, get_fuel_model
 from world.generic_grid import GenericTerrainGrid
 from world.physics import PhysicsModule, StateEvent
 

@@ -100,28 +100,28 @@ class TestRouteAfterLogisticsAgent:
 
 class TestExtractLogisticsPlan:
     def test_lifts_last_message_content_as_plan(self):
-        node = make_extract_plan_node(llm_registry=None)
+        node = make_extract_plan_node()
         msg = AIMessage(content="Deploy 3 engines to sector NE.")
         state = _make_state(messages=[msg])
         result = node(state)
         assert result["logistics_plan"] == "Deploy 3 engines to sector NE."
 
     def test_sets_completed_status(self):
-        node = make_extract_plan_node(llm_registry=None)
+        node = make_extract_plan_node()
         msg = AIMessage(content="Monitor only.")
         state = _make_state(messages=[msg])
         result = node(state)
         assert result["status"] == StatusValue.COMPLETED
 
     def test_no_messages_produces_fallback_plan(self):
-        node = make_extract_plan_node(llm_registry=None)
+        node = make_extract_plan_node()
         state = _make_state()
         result = node(state)
         assert result["logistics_plan"] == "[No plan produced]"
         assert result["status"] == StatusValue.COMPLETED
 
     def test_uses_last_message_not_first(self):
-        node = make_extract_plan_node(llm_registry=None)
+        node = make_extract_plan_node()
         msgs = [
             AIMessage(content="Initial thinking."),
             AIMessage(content="Final recommendation."),
@@ -131,7 +131,7 @@ class TestExtractLogisticsPlan:
         assert result["logistics_plan"] == "Final recommendation."
 
     def test_no_llm_assessment_is_none(self):
-        node = make_extract_plan_node(llm_registry=None)
+        node = make_extract_plan_node()
         msg = AIMessage(content="Plan text.")
         state = _make_state(messages=[msg])
         result = node(state)

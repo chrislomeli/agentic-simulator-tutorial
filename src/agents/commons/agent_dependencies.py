@@ -12,7 +12,7 @@ from __future__ import annotations
 from langgraph.store.base import BaseStore
 from pydantic import BaseModel
 
-from agents.commons.llm_registry import LLMRegistry
+from llm.llm_registry import LLMRegistry
 from prompts import PromptRegistry
 from stores.base import DataStore
 from world import GenericWorldEngine

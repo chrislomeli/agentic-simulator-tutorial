@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import logging
 
-from domains.wildfire.cell_state import FireCellState, TerrainType
 from stores.base import TerrainConfig
 from stores.base import TerrainRepository as TerrainRepositoryBase
 from stores.postgres.gateway import PgGateway
 from stores.schemas import Terrain
+from world.domains.wildfire.cell_state import FireCellState, TerrainType
 
 logger = logging.getLogger(__name__)
 

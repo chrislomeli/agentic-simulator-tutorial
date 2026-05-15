@@ -51,11 +51,11 @@ from typing import Any
 
 from agents.commons.schemas import CellReadings
 from agents.supervisor.state import RiskScore, SupervisorGraph, SupervisorState
-from sensors.publisher import SensorPublisher
-from transport.queue import SensorEventQueue
 from world.cell_state_manager import CellStateManager, EvaluationThresholds
 from world.generic_engine import GenericWorldEngine
 from world.sensor_inventory import SensorInventory
+from world.sensors import SensorPublisher
+from world.transport import SensorEventQueue
 
 # Idle sleep when waiting on the queue. Short enough that we notice the
 # publisher finishing within ~one heartbeat, long enough not to busy-loop.
