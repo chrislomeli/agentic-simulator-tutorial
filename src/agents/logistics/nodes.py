@@ -187,7 +187,6 @@ def make_logistics_agent_node(prompt_registry: PromptRegistry):
             f"Determines equipment and crew availability and issues advisories){Colors.RESET}"
         )
 
-        system_prompt = prompt_registry.render("logistics", {"state": state})  # noqa: F841
 
         response = "Logistics LLM STUB"
         logger.info(
