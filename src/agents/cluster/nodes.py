@@ -265,6 +265,10 @@ def make_evaluate_node(
             )
             for c in skip_cells
         ]
+        if not evaluate_cells:
+            print(f"""\n{Colors.YELLOW}● not CALLING LLM - no potential hotspots found {Colors.RESET}""")
+
+
         if STUB_RISK_SCORE:
             print(f"""\n{Colors.BLUE}● CALLING LLM STUB {Colors.RESET}""")
             llm_risks = [
@@ -278,7 +282,7 @@ def make_evaluate_node(
                 for cell in evaluate_cells
         ]
         else:
-            print(f"""\n{Colors.BLUE}● CALLING LLM  {Colors.RESET}""")
+
             llm = llm_registry.get("classifier")
             system_prompt = prompt_registry.render(
                 "evaluate",
@@ -287,18 +291,16 @@ def make_evaluate_node(
 
             sem = asyncio.Semaphore(max_concurrency)
 
-            async def assess_risk(cell: dict) -> CollatedRecordRisk:
+            async def assess_risk(cell: dict) -> CollatedRecordRisk | BaseException:
+                print(f"""\n{Colors.BLUE}● CALLING LLM  {Colors.RESET}""")
                 human_prompt = json.dumps(cell, default=str, indent=2)
                 async with sem:
-                    response: CollatedRecordRisk = await llm.with_structured_output(CollatedRecordRisk).ainvoke(
+                    return await llm.with_structured_output(CollatedRecordRisk).ainvoke(
                         [
                             SystemMessage(system_prompt),
                             HumanMessage(human_prompt),
                         ]
                     )
-                    print(f"""\n{Colors.TEAL}{response.model_dump_json(indent=2)}{Colors.RESET}""")
-                    return response
-
 
             results = await asyncio.gather(
                 *(assess_risk(c) for c in evaluate_cells),
@@ -315,6 +317,7 @@ def make_evaluate_node(
                         result,
                     )
                 else:
+                    print(f"""\n{Colors.TEAL}{result.model_dump_json(indent=2)}{Colors.RESET}""")
                     llm_risks.append(result)
 
         risks = skipped_risks + llm_risks
