@@ -18,10 +18,17 @@ import sys
 import structlog
 
 
+def _add_log_level_uppercase(logger, method_name, event_dict):
+    """Add uppercase log level as first field for visual scanning."""
+    event_dict["level"] = method_name.upper()
+    return event_dict
+
+
 def configure_logging(level: int = logging.INFO) -> None:
     # Shared processor chain used by both structlog-native and stdlib loggers.
+    # Level is first for visual scanning: {"level": "ERROR", ...}
     shared_processors: list[structlog.types.Processor] = [
-        structlog.stdlib.add_log_level,
+        _add_log_level_uppercase,
         structlog.stdlib.add_logger_name,
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.processors.StackInfoRenderer(),

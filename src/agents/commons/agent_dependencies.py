@@ -22,9 +22,9 @@ from world.cell_state_manager import CellStateManager
 class AgentDependencies(BaseModel):
     model_config = {"arbitrary_types_allowed": True}
 
-    llm_registry: LLMRegistry | None
+    llm_registry: LLMRegistry
     prompt_registry: PromptRegistry
-    data_store: DataStore | None = None
-    world_engine: GenericWorldEngine | None
-    cell_state_manager: CellStateManager | None = None
+    data_store: DataStore
+    world_engine: GenericWorldEngine
+    cell_state_manager: CellStateManager
     store: BaseStore | None = None

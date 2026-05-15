@@ -53,22 +53,26 @@ class TestClusterAgentState:
 # ── evaluate node tests ───────────────────────────────────────────────────────
 
 class TestEvaluateNode:
-    async def test_empty_cells_returns_empty_assessments(self, agent_deps):
+    async def test_empty_cells_returns_empty_assessments(
+        self, prompt_registry, llm_registry, engine
+    ):
         evaluate = make_evaluate_node(
-            prompt_registry=agent_deps.prompt_registry,
-            llm_registry=agent_deps.llm_registry,
-            world_engine=agent_deps.world_engine,
+            prompt_registry=prompt_registry,
+            llm_registry=llm_registry,
+            world_engine=engine,
         )
         state = _make_state()
         result = await evaluate(state)
         assert result["risk_assessments"] == []
         assert result["status"] == StatusValue.PROCESSING
 
-    async def test_stub_produces_one_risk_per_cell(self, agent_deps):
+    async def test_stub_produces_one_risk_per_cell(
+        self, prompt_registry, llm_registry, engine
+    ):
         evaluate = make_evaluate_node(
-            prompt_registry=agent_deps.prompt_registry,
-            llm_registry=agent_deps.llm_registry,
-            world_engine=agent_deps.world_engine,
+            prompt_registry=prompt_registry,
+            llm_registry=llm_registry,
+            world_engine=engine,
         )
         cells = [{"row": 0, "col": 0}, {"row": 0, "col": 1}]
         state = _make_state(updated_cells=cells)
@@ -79,19 +83,21 @@ class TestEvaluateNode:
             assert 0 <= risk.risk_score <= 10
             assert 0 <= risk.confidence <= 3
 
-    async def test_stub_writes_risk_to_cell(self, agent_deps):
+    async def test_stub_writes_risk_to_cell(
+        self, prompt_registry, llm_registry, engine
+    ):
         """evaluate must write CellRiskAssessment onto the grid cell so
         sector_analysis can find hotspots."""
         from agents.commons.schemas import CellRiskAssessment
         evaluate = make_evaluate_node(
-            prompt_registry=agent_deps.prompt_registry,
-            llm_registry=agent_deps.llm_registry,
-            world_engine=agent_deps.world_engine,
+            prompt_registry=prompt_registry,
+            llm_registry=llm_registry,
+            world_engine=engine,
         )
         # heuristic_score must be >= HEURISTIC_EVALUATE_THRESHOLD to pass the gate
         state = _make_state(updated_cells=[{"row": 2, "col": 3, "heuristic_score": 5}])
         await evaluate(state)
-        cell = agent_deps.world_engine.grid.get_cell(2, 3)
+        cell = engine.grid.get_cell(2, 3)
         assert isinstance(cell.risk_assessment, CellRiskAssessment)
 
 
@@ -121,21 +127,21 @@ class TestRouteAfterEvaluate:
 # ── report_risk node tests ────────────────────────────────────────────────────
 
 class TestReportRiskNode:
-    def test_sets_completed_status(self, agent_deps):
-        report_risk = make_report_risk_node(world_engine=agent_deps.world_engine, store=None)
+    def test_sets_completed_status(self, engine):
+        report_risk = make_report_risk_node(world_engine=engine, store=None)
         state = _make_state()
         result = report_risk(state)
         assert result["status"] == StatusValue.COMPLETED
 
-    def test_no_store_does_not_raise(self, agent_deps):
-        report_risk = make_report_risk_node(world_engine=agent_deps.world_engine, store=None)
+    def test_no_store_does_not_raise(self, engine):
+        report_risk = make_report_risk_node(world_engine=engine, store=None)
         state = _make_state(risk_assessments=[])
         result = report_risk(state)
         assert result["status"] == StatusValue.COMPLETED
 
-    def test_writes_to_store_when_provided(self, agent_deps):
+    def test_writes_to_store_when_provided(self, engine):
         store = InMemoryStore()
-        report_risk = make_report_risk_node(world_engine=agent_deps.world_engine, store=store)
+        report_risk = make_report_risk_node(world_engine=engine, store=store)
         assessment = CollatedRecordRisk(
             position=GridPosition(row=1, col=2),
             risk_score=7,
@@ -152,17 +158,17 @@ class TestReportRiskNode:
         assert len(items) == 1
         assert items[0].value["risk_score"] == 7
 
-    def test_empty_assessments_writes_nothing_to_store(self, agent_deps):
+    def test_empty_assessments_writes_nothing_to_store(self, engine):
         store = InMemoryStore()
-        report_risk = make_report_risk_node(world_engine=agent_deps.world_engine, store=store)
+        report_risk = make_report_risk_node(world_engine=engine, store=store)
         state = _make_state(cluster_id="cluster-north", risk_assessments=[])
         report_risk(state)
         items = store.search(("risk_assessments", "cluster-north"))
         assert len(items) == 0
 
-    def test_multiple_assessments_stored_by_position(self, agent_deps):
+    def test_multiple_assessments_stored_by_position(self, engine):
         store = InMemoryStore()
-        report_risk = make_report_risk_node(world_engine=agent_deps.world_engine, store=store)
+        report_risk = make_report_risk_node(world_engine=engine, store=store)
         assessments = [
             CollatedRecordRisk(
                 position=GridPosition(row=r, col=c),

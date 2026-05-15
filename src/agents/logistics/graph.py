@@ -67,35 +67,27 @@ def build_logistics_agent_graph(*, agent_deps: AgentDependencies) -> LogisticsGr
 
     builder = StateGraph(LogisticsAgentState)
 
-    # Add sector analysis node if world_engine available
-    if agent_deps.world_engine is not None:
-        builder.add_node(
-            "sector_analysis",
-            make_sector_analysis_node(
-                world_engine=agent_deps.world_engine, risk_threshold=5, max_sector_miles=20.0
-            ),
-        )
-        builder.add_edge(START, "sector_analysis")
-        builder.add_edge("sector_analysis", "logistics_agent")
-    else:
-        logger.warning(
-            "world_engine not available — sector_analysis skipped, proceeding to logistics_agent"
-        )
-        builder.add_edge(START, "logistics_agent")
-
     builder.add_node(
-        "logistics_agent",
+        "sector_analysis",
+        make_sector_analysis_node(
+            world_engine=agent_deps.world_engine,
+            risk_threshold=5,
+            max_sector_miles=20.0
+        )
+    )
+    builder.add_node( "logistics_agent",
         make_logistics_agent_node(agent_deps.prompt_registry),
     )
+    builder.add_node("extract_plan",
+                     make_extract_plan_node())
 
-    builder.add_node("extract_plan", make_extract_plan_node())
-
+    builder.add_edge(START, "sector_analysis")
+    builder.add_edge("sector_analysis", "logistics_agent")
     builder.add_conditional_edges(
         "logistics_agent",
         route_after_logistics_agent,
         {"extract_plan": "extract_plan", END: END},
     )
-
     builder.add_edge("extract_plan", END)
 
     return LogisticsGraph(builder.compile())
