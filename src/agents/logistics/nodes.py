@@ -260,6 +260,7 @@ def make_sector_analysis_node(
 
     def sector_analysis(state: LogisticsAgentState) -> dict:
         """Analyze radial sectors around high-risk hotspots."""
+        print(f"{Colors.GREEN} NODE:: sector_analysis{Colors.RESET}")
         from agents.commons.schemas import CellRiskAssessment
 
         hotspots = []
@@ -357,7 +358,8 @@ def make_logistics_agent_node():
         calls (after tool results), the accumulated messages are passed as-is —
         LangGraph's add_messages reducer has already appended the ToolMessages.
         """
-        print(f"""\n{Colors.YELLOW}● NOT CALLING LOGISTICS LLM - Determines equipment and crew availability and issues advisories  {Colors.RESET}""")
+        print(f"""\n{Colors.GREEN}● NODE:: logistics_agent {Colors.RESET}""")
+        print(f"""{Colors.YELLOW}● NOT CALLING LOGISTICS LLM - Determines equipment and crew availability and issues advisories)  {Colors.RESET}""")
         response = "Logistics LLM STUB"
         logger.info(
             "logistics_agent LLM response: tool_calls=%d",
@@ -419,6 +421,7 @@ def make_extract_plan_node():
         data_gaps is the branching signal: empty = agent had what it needed;
         non-empty = upstream should consider widening search or escalating.
         """
+        print(f"""\n{Colors.GREEN}● NODE:: extract_logistics_plan {Colors.RESET}""")
         last = state.messages[-1] if state.messages else None
         plan = last.content if last else "[No plan produced]"
         logger.info("Logistics plan extracted (%d chars)", len(plan))

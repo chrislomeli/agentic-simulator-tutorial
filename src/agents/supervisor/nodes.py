@@ -49,6 +49,7 @@ def fan_out_to_clusters(state: SupervisorState) -> list[Send]:
     LangGraph advances to ``assess_situation`` with the accumulated
     ``cluster_score`` and ``cluster_findings``.
     """
+    print(f"{Colors.GREEN} NODE:: fan_out_to_clusters{Colors.RESET}")
     clusters: dict[str, list[CellReadings]] = state.clusters
     cluster_ids = list(clusters.keys())
     logger.info(
@@ -86,6 +87,7 @@ def make_run_cluster_agent(cluster_graph: CompiledStateGraph):
     """
 
     async def run_cluster_agent(state: ClusterAgentState) -> dict:
+        print(f"{Colors.GREEN} NODE:: run_cluster_agent{Colors.RESET}")
         cluster_id = state.cluster_id
         logger.info("Supervisor invoking cluster agent for cluster=%s", cluster_id)
 
@@ -115,6 +117,7 @@ def assess_situation(state: SupervisorState) -> dict:
     Store, call an LLM to correlate findings across clusters, and detect
     cross-cluster patterns (e.g. one large event vs many isolated ones).
     """
+    print(f"{Colors.GREEN} NODE:: assess_situation{Colors.RESET}")
     findings = state.cluster_findings
     cluster_ids = list(state.clusters.keys())
 
@@ -149,6 +152,7 @@ def make_run_logistics_agent(logistics_graph: CompiledStateGraph):
     """
 
     def run_logistics_agent(state: SupervisorState) -> dict:
+        print(f"{Colors.GREEN} NODE:: run_logistics_agent{Colors.RESET}")
         logistics_state = LogisticsAgentState(
             situation_summary=state.situation_summary or "",
             cluster_findings=state.cluster_findings,
@@ -172,6 +176,7 @@ def make_dispatch_commands(store: BaseStore | None = None):
     """
 
     def dispatch_commands(state: SupervisorState) -> dict:
+        print(f"{Colors.GREEN} NODE:: dispatch_commands{Colors.RESET}")
         commands = state.pending_commands
         logger.info("Supervisor dispatching %d command(s)", len(commands))
 
