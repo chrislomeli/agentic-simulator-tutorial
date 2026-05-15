@@ -35,7 +35,6 @@ def _load() -> list[dict]:
 
 
 class MockResourceRepository(ResourceRepositoryBase):
-
     def __init__(self) -> None:
         self._saved: list[Resource] = []
 
@@ -67,33 +66,35 @@ class MockResourceRepository(ResourceRepositoryBase):
             if dist > radius_miles:
                 continue
 
-            results.append({
-                "resource_id": row.get("resource_id"),
-                "resource_category": row.get("resource_category"),
-                "resource_type": row.get("resource_type"),
-                "nwcg_type": row.get("nwcg_type"),
-                "personnel": row.get("personnel"),
-                "battalion": row.get("battalion"),
-                "station_name": row.get("station_name"),
-                "lat": r_lat,
-                "long": r_lon,
-                "distance_miles": round(dist, 2),
-                "status": "available",
-                # Commitment fields — always None in mock (no resource_assignments table)
-                "commitment_level": None,
-                "commitment_start_date": None,
-                "commitment_length_days": None,
-                "fire_id": None,
-                "fire_name": None,
-                "fire_size_acres": None,
-                "percent_containment": None,
-                "gacc_priority": None,
-                "fire_personnel": None,
-                "crews": None,
-                "engines": None,
-                "helicopters": None,
-                "structures_lost": None,
-            })
+            results.append(
+                {
+                    "resource_id": row.get("resource_id"),
+                    "resource_category": row.get("resource_category"),
+                    "resource_type": row.get("resource_type"),
+                    "nwcg_type": row.get("nwcg_type"),
+                    "personnel": row.get("personnel"),
+                    "battalion": row.get("battalion"),
+                    "station_name": row.get("station_name"),
+                    "lat": r_lat,
+                    "long": r_lon,
+                    "distance_miles": round(dist, 2),
+                    "status": "available",
+                    # Commitment fields — always None in mock (no resource_assignments table)
+                    "commitment_level": None,
+                    "commitment_start_date": None,
+                    "commitment_length_days": None,
+                    "fire_id": None,
+                    "fire_name": None,
+                    "fire_size_acres": None,
+                    "percent_containment": None,
+                    "gacc_priority": None,
+                    "fire_personnel": None,
+                    "crews": None,
+                    "engines": None,
+                    "helicopters": None,
+                    "structures_lost": None,
+                }
+            )
 
         results.sort(key=lambda r: r["distance_miles"])
         logger.info("Mock: found %d resources within radius", len(results))

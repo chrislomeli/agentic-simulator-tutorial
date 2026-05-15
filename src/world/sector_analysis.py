@@ -48,20 +48,19 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from world.cell_state import GenericCell
-from world.directions import Direction, SECTOR_ANGLES
+from world.directions import SECTOR_ANGLES, Direction
 from world.grid import FireState, TerrainType
-
 
 # ── Public types ──────────────────────────────────────────────────────────────
 
 StopReason = Literal[
-    "barrier:urban",   # settlement at risk — fire would impact people/property
-    "barrier:water",   # natural firebreak
-    "barrier:rock",    # natural firebreak
-    "barrier:snow",    # natural firebreak
-    "burned",          # already-burned area (no more fuel)
-    "max_distance",    # hit the configured trace limit — fuel may continue beyond
-    "grid_edge",       # ran off the map — unknown beyond
+    "barrier:urban",  # settlement at risk — fire would impact people/property
+    "barrier:water",  # natural firebreak
+    "barrier:rock",  # natural firebreak
+    "barrier:snow",  # natural firebreak
+    "burned",  # already-burned area (no more fuel)
+    "max_distance",  # hit the configured trace limit — fuel may continue beyond
+    "grid_edge",  # ran off the map — unknown beyond
 ]
 
 
