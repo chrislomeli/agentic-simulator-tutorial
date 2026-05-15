@@ -232,7 +232,7 @@ def route_after_assess(state: SupervisorState) -> str:
         max_score,
         LOGISTICS_RISK_THRESHOLD,
     )
-    return "dispatch_commands"
+    return "route_base(state, next_node="report_risk")
 
 
 def route_after_decide(state: SupervisorState) -> str:
