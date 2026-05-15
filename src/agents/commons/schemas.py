@@ -39,6 +39,7 @@ from enum import Enum
 
 from pydantic import BaseModel, Field
 
+from agents.commons.node_types import NodeError
 from agents.commons.state_types import StatusValue
 from domains.wildfire import FireCellState
 
@@ -93,7 +94,7 @@ class TracedState(BaseModel):
         default=None, description="Request correlation ID for tracing across nodes/graphs"
     )
     status: StatusValue = Field(default=StatusValue.IDLE, description="Current state machine value")
-    error: dict | None = Field(
+    error: NodeError | None = Field(
         default=None, description="Structured error record if last node raised exception"
     )
 
