@@ -2,7 +2,7 @@
 
 import pytest
 
-from domains.wildfire.nwcg_resources import (
+from world.domains.wildfire.nwcg_resources import (
     INTENSITY_THRESHOLDS,
     NWCG_CATALOG,
     get_by_id,

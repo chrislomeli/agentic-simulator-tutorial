@@ -44,9 +44,9 @@ from agents.commons.schemas import (
     GridPosition,
     Metric,
 )
-from transport.schemas import SensorEvent
 from world.coverage_index import CoverageIndex
 from world.sensor_inventory import SensorInventory
+from world.transport import SensorEvent
 
 logger = logging.getLogger(__name__)
 

@@ -16,8 +16,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from domains.wildfire.cell_state import FireCellState
     from stores.schemas import Resource, Terrain, WildfireActivity
+    from world.domains.wildfire.cell_state import FireCellState
     from world.sensor_inventory import SensorInventory
 
 

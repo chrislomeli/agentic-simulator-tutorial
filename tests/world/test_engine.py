@@ -1,7 +1,7 @@
 """Tests for GenericWorldEngine — tick, run, history, inject_state."""
 
-from domains.wildfire import FireCellState, FirePhysicsModule, FireState, TerrainType
-from domains.wildfire.environment import FireEnvironmentState
+from world.domains.wildfire import FireCellState, FirePhysicsModule, FireState, TerrainType
+from world.domains.wildfire.environment import FireEnvironmentState
 from world import GenericGroundTruthSnapshot, GenericWorldEngine
 from world.generic_grid import GenericTerrainGrid
 

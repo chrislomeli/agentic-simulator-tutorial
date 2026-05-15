@@ -9,6 +9,7 @@ Topology
       → fan_out_to_clusters     (conditional edge — returns list[Send])
         → run_cluster_agent     (parallel, one per cluster)
       → assess_situation
+      → run_logistics_agent     (ReAct subgraph: heatmap + resources + wildfire tools)
       → dispatch_commands → END
 
 The Send API pattern
@@ -45,6 +46,7 @@ from agents.supervisor.nodes import (
     fan_out_to_clusters,
     make_dispatch_commands,
     make_run_cluster_agent,
+
 )
 from agents.supervisor.state import SupervisorGraph, SupervisorState
 
@@ -52,7 +54,7 @@ logger = logging.getLogger(__name__)
 
 
 def build_supervisor_graph(*, agent_dependencies: AgentDependencies) -> SupervisorGraph:
-    """Compile and return the superisor graph.
+    """Compile and return the supervisor graph.
 
     Parameters
     ──────────
@@ -62,7 +64,6 @@ def build_supervisor_graph(*, agent_dependencies: AgentDependencies) -> Supervis
         to render prompts, call LLMs, and persist findings.
     """
     cluster_graph = build_cluster_agent_graph(agent_deps=agent_dependencies)
-
 
     builder = StateGraph(SupervisorState)
     builder.add_node("run_cluster_agent", make_run_cluster_agent(cluster_graph))

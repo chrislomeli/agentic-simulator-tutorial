@@ -32,7 +32,7 @@ from __future__ import annotations
 import random
 from typing import Any
 
-from sensors.base import SensorBase
+from world.sensors.base import SensorBase
 
 # ── Temperature sensor ───────────────────────────────────────────────────────
 

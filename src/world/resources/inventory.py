@@ -41,7 +41,7 @@ import random
 from collections import Counter
 from typing import Any
 
-from resources.base import ResourceBase, ResourceStatus
+from world.resources.base import ResourceBase, ResourceStatus
 
 logger = logging.getLogger(__name__)
 

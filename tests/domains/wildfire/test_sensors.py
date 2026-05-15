@@ -4,7 +4,7 @@ import random
 
 import pytest
 
-from domains.wildfire.sensors import (
+from world.domains.wildfire.sensors import (
     BarometricSensor,
     HumiditySensor,
     SmokeSensor,

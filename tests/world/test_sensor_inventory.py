@@ -2,7 +2,7 @@
 
 import pytest
 
-from sensors.base import FailureMode, SensorBase
+from world.sensors.base import FailureMode, SensorBase
 from world.sensor_inventory import SensorInventory
 
 # ── Minimal sensor for testing ───────────────────────────────────────────────
