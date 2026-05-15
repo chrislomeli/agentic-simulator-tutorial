@@ -68,6 +68,7 @@ SECTOR_VECTORS = {
 
 class Colors:
     BLUE = "\033[94m"
+    GREEN = "\033[32m"
     TEAL = "\033[96m"
     YELLOW = "\033[93m"
     RED = "\033[91m"
