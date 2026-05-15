@@ -52,7 +52,7 @@ from abc import ABC, abstractmethod
 from enum import StrEnum
 from typing import Any
 
-from transport.schemas import SensorEvent
+from world.transport.schemas import SensorEvent
 
 logger = logging.getLogger(__name__)
 

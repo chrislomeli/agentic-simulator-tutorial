@@ -101,7 +101,7 @@ if __name__ == "__main__":
     """Quick sanity check: create spoof advisories, save, retrieve."""
     import sys
 
-    from agents.logistics.tools.advisory import ResourceAdvisoryRecord
+    from tools.advisory import ResourceAdvisoryRecord
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 

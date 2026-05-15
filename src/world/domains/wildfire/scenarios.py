@@ -24,13 +24,13 @@ will the fire jump the ridge?  The agent has to monitor both sides.
 
 from __future__ import annotations
 
-from domains.wildfire.cell_state import FireCellState, TerrainType
-from domains.wildfire.environment import FireEnvironmentState
-from domains.wildfire.physics import SimpleFirePhysicsModule
-from resources.base import ResourceBase
-from resources.inventory import ResourceInventory
+from world.domains.wildfire.cell_state import FireCellState, TerrainType
+from world.domains.wildfire.environment import FireEnvironmentState
+from world.domains.wildfire.physics import SimpleFirePhysicsModule
 from world.generic_engine import GenericWorldEngine
 from world.generic_grid import GenericTerrainGrid
+from world.resources.base import ResourceBase
+from world.resources.inventory import ResourceInventory
 
 
 def create_basic_wildfire(
@@ -62,7 +62,7 @@ def create_basic_wildfire(
       Wind from SW (225°) → pushes fire north-east.
     """
     if use_rothermel:
-        from domains.wildfire.rothermel_physics import RothermelFirePhysicsModule
+        from world.domains.wildfire.rothermel_physics import RothermelFirePhysicsModule
 
         physics = RothermelFirePhysicsModule(
             cell_size_ft=cell_size_ft,

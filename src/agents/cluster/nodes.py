@@ -51,11 +51,11 @@ from agents.commons.schemas import (
     GridPosition,
 )
 from agents.commons.state_types import StatusValue
-from domains.wildfire import FireCellState
 from llm.llm_registry import LLMRegistry
 from prompts import PromptRegistry
 from world import GenericCell, GenericWorldEngine
 from world.cell_state_manager import CellStateManager
+from world.domains.wildfire import FireCellState
 
 logger = logging.getLogger(__name__)
 

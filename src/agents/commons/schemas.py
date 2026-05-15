@@ -40,7 +40,7 @@ from pydantic import BaseModel, Field
 
 from agents.commons.node_types import NodeError
 from agents.commons.state_types import StatusValue
-from domains.wildfire import FireCellState
+from world.domains.wildfire import FireCellState
 
 
 class Colors:
