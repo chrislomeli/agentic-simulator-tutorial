@@ -11,7 +11,6 @@ logger = logging.getLogger(__name__)
 
 
 class MockAdvisoryRepository(AdvisoryRepositoryBase):
-
     def __init__(self) -> None:
         self._store: list[Any] = []
 
@@ -30,7 +29,8 @@ class MockAdvisoryRepository(AdvisoryRepositoryBase):
         limit: int = 10,
     ) -> list[Any]:
         matches = [
-            a for a in self._store
+            a
+            for a in self._store
             if getattr(a, "epicenter_row", None) == grid_row
             and getattr(a, "epicenter_column", None) == grid_col
         ]
