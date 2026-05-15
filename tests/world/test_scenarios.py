@@ -1,7 +1,7 @@
 """Tests for domains.wildfire.scenarios — create_basic_wildfire."""
 
-from domains.wildfire import FireState, TerrainType
-from domains.wildfire.scenarios import create_basic_wildfire
+from world.domains.wildfire import FireState, TerrainType
+from world.domains.wildfire.scenarios import create_basic_wildfire
 from world import GenericGroundTruthSnapshot, GenericWorldEngine
 
 
@@ -46,7 +46,7 @@ class TestBasicWildfireScenario:
         assert engine.grid.get_cell(8, 9).cell_state.terrain_type == TerrainType.URBAN
 
     def test_weather_conditions(self):
-        from domains.wildfire.environment import FireEnvironmentState
+        from world.domains.wildfire.environment import FireEnvironmentState
         engine = create_basic_wildfire()
         env = engine.environment
         assert isinstance(env, FireEnvironmentState)

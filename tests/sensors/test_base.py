@@ -1,7 +1,7 @@
 """Tests for world-simiulator.sensors.base — SensorBase, FailureMode, emit."""
 
-from sensors.base import FailureMode, SensorBase
-from transport import SensorEvent
+from world.sensors.base import FailureMode, SensorBase
+from world.transport import SensorEvent
 
 # ── Concrete test sensor ─────────────────────────────────────────────────────
 

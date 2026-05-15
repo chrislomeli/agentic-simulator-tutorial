@@ -46,7 +46,7 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-from transport.queue import SensorEventQueue
+from world.transport.queue import SensorEventQueue
 
 if TYPE_CHECKING:
     from world.generic_engine import GenericWorldEngine

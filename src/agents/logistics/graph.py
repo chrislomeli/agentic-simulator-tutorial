@@ -40,7 +40,6 @@ from __future__ import annotations
 import logging
 
 from langgraph.graph import END, START, StateGraph
-from langgraph.prebuilt import ToolNode
 
 from agents.commons.agent_dependencies import AgentDependencies
 from agents.logistics.nodes import (
@@ -65,7 +64,6 @@ def build_logistics_agent_graph(*, agent_deps: AgentDependencies) -> LogisticsGr
           - data_store    : DataStore facade (resources + wildfire + advisory tools)
           - llm_registry  : LLM lookup by role (for logistics_agent node)
     """
-
 
     builder = StateGraph(LogisticsAgentState)
 

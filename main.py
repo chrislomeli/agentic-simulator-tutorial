@@ -34,14 +34,14 @@ from agents.supervisor.graph import build_supervisor_graph
 from agents.supervisor.state import SupervisorGraph
 from logging_config import configure_logging
 from world import GenericWorldEngine
+from world.domains.wildfire import sample_local_conditions
+from world.domains.wildfire.scenario_loader import load_scenario_from_db
 
 # configure_logging() must come before all project imports so that
 # module-level loggers are captured by structlog from the first record.
 configure_logging(level=logging.INFO)
-# noqa: E402
+from agents.commons.schemas import CellReadings, CollatedRecordRisk  # noqa: E402
 from config import get_settings  # noqa: E402
-from domains.wildfire.sampler import sample_local_conditions  # noqa: E402
-from domains.wildfire.scenario_loader import load_scenario_from_db  # noqa: E402
 from runtime import RuntimeOrchestrator  # noqa: E402
 from stores import get_postgres_data_store  # noqa: E402
 from stores.base import DataStore  # noqa: E402

@@ -21,7 +21,7 @@ from __future__ import annotations
 from enum import Enum
 
 
-class Direction(str, Enum): # noqa: UP042
+class Direction(str, Enum):  # noqa: UP042
     """One of eight compass directions used for radial grid analysis."""
 
     N = "N"

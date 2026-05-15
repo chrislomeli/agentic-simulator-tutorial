@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
-from transport import SensorEvent
+from world.transport import SensorEvent
 
 
 class TestSensorEventCreate:

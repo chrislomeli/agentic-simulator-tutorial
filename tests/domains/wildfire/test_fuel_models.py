@@ -2,7 +2,7 @@
 
 import pytest
 
-from domains.wildfire.fuel_models import FUEL_MODELS, FuelModel, get_fuel_model
+from world.domains.wildfire.fuel_models import FUEL_MODELS, FuelModel, get_fuel_model
 from world.grid import TerrainType
 
 
