@@ -27,15 +27,15 @@ and fast enough to generate thousands of scenarios offline.
 
 from world.cell_state import CellState as CellState
 from world.cell_state import GenericCell as GenericCell
+from world.directions import SECTOR_ANGLES as SECTOR_ANGLES
+from world.directions import SECTOR_VECTORS as SECTOR_VECTORS
+from world.directions import Direction as Direction
 from world.environment import EnvironmentState as EnvironmentState
 from world.generic_engine import GenericGroundTruthSnapshot as GenericGroundTruthSnapshot
 from world.generic_engine import GenericWorldEngine as GenericWorldEngine
 from world.generic_grid import GenericTerrainGrid as GenericTerrainGrid
 from world.grid import FireState as FireState
 from world.grid import TerrainType as TerrainType
-from world.directions import Direction as Direction
-from world.directions import SECTOR_ANGLES as SECTOR_ANGLES
-from world.directions import SECTOR_VECTORS as SECTOR_VECTORS
 from world.physics import PhysicsModule as PhysicsModule
 from world.physics import StateEvent as StateEvent
 from world.sector_analysis import HotspotSectors as HotspotSectors
