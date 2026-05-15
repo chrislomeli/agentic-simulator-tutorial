@@ -41,17 +41,18 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.store.base import BaseStore
 
 from agents.cluster.state import ClusterAgentState
-from llm.llm_registry import LLMRegistry
 from agents.commons.node_executor import node_executor
 from agents.commons.routing import route_base
 from agents.commons.schemas import (
     CellReadings,
     CellRiskAssessment,
     CollatedRecordRisk,
-    GridPosition, Colors,
+    Colors,
+    GridPosition,
 )
 from agents.commons.state_types import StatusValue
 from domains.wildfire import FireCellState
+from llm.llm_registry import LLMRegistry
 from prompts import PromptRegistry
 from world import GenericCell, GenericWorldEngine
 from world.cell_state_manager import CellStateManager
@@ -103,6 +104,7 @@ def make_update_world_state(
 
     The list of cell dicts is what the evaluate node hands to the LLM.
     """
+
     @node_executor("update_world")
     def update_world(state: ClusterAgentState):
         readings: list[CellReadings] = state.readings
@@ -266,23 +268,23 @@ def make_evaluate_node(
             for c in skip_cells
         ]
         if not evaluate_cells:
-            print(f"""\n{Colors.YELLOW}● not CALLING LLM - no potential hotspots found {Colors.RESET}""")
-
+            print(
+                f"""\n{Colors.YELLOW}● not CALLING LLM - no potential hotspots found {Colors.RESET}"""
+            )
 
         if STUB_RISK_SCORE:
             print(f"""\n{Colors.BLUE}● CALLING LLM STUB {Colors.RESET}""")
             llm_risks = [
-            CollatedRecordRisk(
-                position=GridPosition(row=cell["row"], col=cell["col"]),
-                risk_score=10,
-                confidence=3,
-                confidence_rationale="Stub score — LLM not active in this milestone.",
-                contributing_factors=["stub"],
-            )
+                CollatedRecordRisk(
+                    position=GridPosition(row=cell["row"], col=cell["col"]),
+                    risk_score=10,
+                    confidence=3,
+                    confidence_rationale="Stub score — LLM not active in this milestone.",
+                    contributing_factors=["stub"],
+                )
                 for cell in evaluate_cells
-        ]
+            ]
         else:
-
             llm = llm_registry.get("classifier")
             system_prompt = prompt_registry.render(
                 "evaluate",

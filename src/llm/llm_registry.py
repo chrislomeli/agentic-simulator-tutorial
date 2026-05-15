@@ -39,8 +39,8 @@ from typing import Any
 
 from pydantic import SecretStr
 
-from llm.token_callback import TokenUsageCallback
 from config import Settings
+from llm.token_callback import TokenUsageCallback
 
 logger = logging.getLogger(__name__)
 

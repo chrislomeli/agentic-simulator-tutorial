@@ -31,7 +31,6 @@ def _load() -> list[dict]:
 
 
 class MockTerrainRepository(TerrainRepositoryBase):
-
     def fetch_terrain(
         self,
         region_name: str,
@@ -77,6 +76,8 @@ class MockTerrainRepository(TerrainRepositoryBase):
             temperature_c=terrain.temperature_c if terrain.temperature_c is not None else 30.0,
             humidity_pct=terrain.humidity_pct if terrain.humidity_pct is not None else 25.0,
             wind_speed_mps=terrain.wind_speed_mps if terrain.wind_speed_mps is not None else 5.0,
-            wind_direction_deg=terrain.wind_direction_deg if terrain.wind_direction_deg is not None else 0.0,
+            wind_direction_deg=terrain.wind_direction_deg
+            if terrain.wind_direction_deg is not None
+            else 0.0,
             pressure_hpa=terrain.pressure_hpa if terrain.pressure_hpa is not None else 1013.0,
         )
