@@ -36,6 +36,7 @@ logger = logging.getLogger(__name__)
 
 # ── Conditional edge: dynamic fan-out ────────────────────────────────────────
 
+
 @node_executor("fan_out_to_clusters")
 def fan_out_to_clusters(state: SupervisorState) -> list[Send]:
     """Dynamic fan-out — one ``Send`` per active cluster.

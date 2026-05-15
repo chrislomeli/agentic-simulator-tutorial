@@ -2,7 +2,7 @@
 
 import pytest
 
-from transport import SensorEvent
+from world.transport import SensorEvent
 
 
 @pytest.fixture

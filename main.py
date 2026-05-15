@@ -42,8 +42,8 @@ configure_logging(level=logging.INFO)
 
 from agents.commons.schemas import CellReadings, CollatedRecordRisk  # noqa: E402
 from config import get_settings  # noqa: E402
-from domains.wildfire.sampler import sample_local_conditions  # noqa: E402
-from domains.wildfire.scenario_loader import load_scenario_from_db  # noqa: E402
+from world.domains.wildfire.sampler import sample_local_conditions  # noqa: E402
+from world.domains.wildfire.scenario_loader import load_scenario_from_db  # noqa: E402
 from runtime import RuntimeOrchestrator  # noqa: E402
 from stores import get_postgres_data_store  # noqa: E402
 from stores.base import DataStore  # noqa: E402
