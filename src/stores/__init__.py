@@ -15,7 +15,7 @@ from stores.base import (
     TerrainRepository,
     WildfireRepository,
 )
-from stores.mock.data_store import MockDataStore, get_mock_data_store
+from stores.postgres.data_store import PostgresDataStore, get_postgres_data_store
 from stores.schemas import Resource, Sensor, Terrain, WildfireActivity
 
 __all__ = [
@@ -28,8 +28,8 @@ __all__ = [
     "TerrainRepository",
     "WildfireRepository",
     # Postgres impl entry points
-    "MockDataStore",
-    "get_mock_data_store",
+    "PostgresDataStore",
+    "get_postgres_data_store",
     # Schemas
     "Resource",
     "Sensor",

@@ -43,7 +43,7 @@ from config import get_settings  # noqa: E402
 from domains.wildfire.sampler import sample_local_conditions  # noqa: E402
 from domains.wildfire.scenario_loader import load_scenario_from_db  # noqa: E402
 from runtime import RuntimeOrchestrator  # noqa: E402
-from stores import get_mock_data_store  # noqa: E402
+from stores import get_postgres_data_store  # noqa: E402
 from stores.base import DataStore  # noqa: E402
 from world.cell_state_manager import CellStateManager  # noqa: E402
 
@@ -104,7 +104,7 @@ async def run_orchestrator(engine, sensor_inventory, cell_state_manager, agent_d
 
 
 def main() -> None:
-    data_store = get_mock_data_store()
+    data_store = get_postgres_data_store()
     try:
         engine, sensor_inventory = load_scenario_from_db("lpnf-south", data_store)
         cell_state_manager = CellStateManager(
