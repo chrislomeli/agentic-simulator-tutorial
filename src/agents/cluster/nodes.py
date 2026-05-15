@@ -41,6 +41,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.store.base import BaseStore
 
 from agents.cluster.state import ClusterAgentState
+from agents.commons.llm_registry import LLMRegistry
 from agents.commons.node_executor import node_executor
 from agents.commons.routing import route_base
 from agents.commons.schemas import (
@@ -174,6 +175,7 @@ def make_update_world_state(
 
 def make_evaluate_node(
     prompt_registry: PromptRegistry,
+    llm_registry: LLMRegistry,
     world_engine: GenericWorldEngine,
 ):
     """Factory that creates the evaluate node.
@@ -234,8 +236,38 @@ def make_evaluate_node(
                 "status": StatusValue.PROCESSING,
             }
 
-        print(f"""\n{Colors.YELLOW}● NOT CALLING EVALUATOR LLM - Evaluates a single cell and scores fire risk {Colors.RESET}""")
-        risks = [
+        # Split on heuristic score — only call the LLM for cells that have at
+        # least one risk factor present. Cells below the threshold are assigned
+        # risk_score=0 with high confidence: the heuristic says nothing is there.
+        evaluate_cells = [
+            c for c in cells if c.get("heuristic_score", 0) >= HEURISTIC_EVALUATE_THRESHOLD
+        ]
+        skip_cells = [
+            c for c in cells if c.get("heuristic_score", 0) < HEURISTIC_EVALUATE_THRESHOLD
+        ]
+
+        if skip_cells:
+            logger.info(
+                "ClusterAgent[%s] heuristic gate: skipping %d/%d cells (score < %d)",
+                cluster_id,
+                len(skip_cells),
+                len(cells),
+                HEURISTIC_EVALUATE_THRESHOLD,
+            )
+
+        skipped_risks = [
+            CollatedRecordRisk(
+                position=GridPosition(row=c["row"], col=c["col"]),
+                risk_score=0,
+                confidence=3,
+                confidence_rationale="Heuristic gate: no risk factors present.",
+                contributing_factors=["heuristic_gate"],
+            )
+            for c in skip_cells
+        ]
+        if STUB_RISK_SCORE:
+            print(f"""\n{Colors.BLUE}● CALLING LLM STUB {Colors.RESET}""")
+            llm_risks = [
             CollatedRecordRisk(
                 position=GridPosition(row=cell["row"], col=cell["col"]),
                 risk_score=10,
@@ -243,9 +275,46 @@ def make_evaluate_node(
                 confidence_rationale="Stub score — LLM not active in this milestone.",
                 contributing_factors=["stub"],
             )
-            for cell in cells
+                for cell in evaluate_cells
         ]
+        else:
+            print(f"""\n{Colors.TEAL}● CALLING LLM  {Colors.RESET}""")
+            llm = llm_registry.get("classifier")
+            system_prompt = prompt_registry.render(
+                "evaluate",
+                {"cluster_id": cluster_id},
+            )
 
+            sem = asyncio.Semaphore(max_concurrency)
+
+            async def assess_risk(cell: dict) -> CollatedRecordRisk:
+                human_prompt = json.dumps(cell, default=str, indent=2)
+                async with sem:
+                    return await llm.with_structured_output(CollatedRecordRisk).ainvoke(
+                        [
+                            SystemMessage(system_prompt),
+                            HumanMessage(human_prompt),
+                        ]
+                    )
+
+            results = await asyncio.gather(
+                *(assess_risk(c) for c in evaluate_cells),
+                return_exceptions=True,
+            )
+            llm_risks = []
+            for cell, result in zip(evaluate_cells, results):
+                if isinstance(result, BaseException):
+                    logger.error(
+                        "ClusterAgent[%s] assess_risk failed for cell (%s,%s): %s",
+                        cluster_id,
+                        cell["row"],
+                        cell["col"],
+                        result,
+                    )
+                else:
+                    llm_risks.append(result)
+
+        risks = skipped_risks + llm_risks
 
         # Write risk back onto the cell so sector_analysis can find hotspots.
         grid = world_engine.grid

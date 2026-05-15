@@ -182,16 +182,13 @@ def make_dispatch_commands(store: BaseStore | None = None):
         commands = state.pending_commands
         logger.info("Supervisor dispatching %d command(s)", len(commands))
 
-        print(f"\n{Colors.YELLOW}DISPATCH FINAL FINDINGS")
-        print(f"{state.situation_summary}")
-        print(f"{state.cluster_findings}\n\n")
+        print("\nDISPATCH FINAL FINDINGS")
         print("Cluster risk scores (0–10)")
         for key, value in state.cluster_score.items():
             print(f"{key}: risk_score: {value.risk_score}, confidence: {value.confidence}")
         if state.logistics_plan:
             print("\nLOGISTICS PLAN")
             print(state.logistics_plan)
-        print(f"{Colors.RESET}")
         return {"status": StatusValue.COMPLETED}
 
     return dispatch_commands

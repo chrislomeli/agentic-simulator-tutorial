@@ -12,6 +12,7 @@ from __future__ import annotations
 from langgraph.store.base import BaseStore
 from pydantic import BaseModel
 
+from agents.commons.llm_registry import LLMRegistry
 from prompts import PromptRegistry
 from stores.base import DataStore
 from world import GenericWorldEngine
@@ -21,6 +22,7 @@ from world.cell_state_manager import CellStateManager
 class AgentDependencies(BaseModel):
     model_config = {"arbitrary_types_allowed": True}
 
+    llm_registry: LLMRegistry | None
     prompt_registry: PromptRegistry
     data_store: DataStore | None = None
     world_engine: GenericWorldEngine | None

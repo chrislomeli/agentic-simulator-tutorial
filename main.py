@@ -40,6 +40,7 @@ from world import GenericWorldEngine
 # module-level loggers are captured by structlog from the first record.
 configure_logging(level=logging.INFO)
 
+from agents.commons.llm_registry import LLMLabel, build_llm_registry, models  # noqa: E402
 from agents.commons.schemas import CellReadings, CollatedRecordRisk  # noqa: E402
 from config import get_settings  # noqa: E402
 from domains.wildfire.sampler import sample_local_conditions  # noqa: E402
@@ -62,6 +63,12 @@ def build_agent_deps(
     """Construct the LLM/prompt/store dependencies for graph compilation."""
     settings = get_settings()
     settings.apply_langsmith()
+
+    llm_registry = build_llm_registry(settings, models, {
+        "classifier": LLMLabel.GPT_MINI,
+        "logistics": LLMLabel.GPT_MINI,
+    })
+
     store = None
 
     prompt_registry = PromptRegistry()
@@ -69,6 +76,7 @@ def build_agent_deps(
 
     return AgentDependencies(
         prompt_registry=prompt_registry,
+        llm_registry=llm_registry,
         world_engine=engine,
         cell_state_manager=cell_state_manager,
         store=store,

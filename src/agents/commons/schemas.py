@@ -35,7 +35,6 @@ GridPosition follows GenericTerrainGrid's convention:
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
 
 from pydantic import BaseModel, Field
 
@@ -43,29 +42,6 @@ from agents.commons.node_types import NodeError
 from agents.commons.state_types import StatusValue
 from domains.wildfire import FireCellState
 
-
-class Direction(str, Enum):
-    N = "N"
-    NE = "NE"
-    E = "E"
-    SE = "SE"
-    S = "S"
-    SW = "SW"
-    W = "W"
-    NW = "NW"
-
-SECTOR_ANGLES = {Direction.N: 0, Direction.NE: 45, Direction.E: 90, Direction.SE: 135, Direction.S: 180, Direction.SW: 225, Direction.W: 270, Direction.NW: 315}
-
-SECTOR_VECTORS = {
-    Direction.N: (-1, 0),
-    Direction.NE: (-1, 1),
-    Direction.E: (0, 1),
-    Direction.SE: (1, 1),
-    Direction.S: (1, 0),
-    Direction.SW: (1, -1),
-    Direction.W: (0, -1),
-    Direction.NW: (-1, -1),
-}
 
 class Colors:
     BLUE = "\033[94m"

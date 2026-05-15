@@ -10,11 +10,14 @@ Loading order (pydantic-settings resolves in this priority, highest first):
 
 Usage
 ─────
-  from config import Settings models
+  from config import Settings, build_llm_registry, LLM_ROLE_CONFIG, models
 
   settings = Settings()
   settings.apply_langsmith()
 
+  registry = build_llm_registry(settings, models, LLM_ROLE_CONFIG)
+  llm = registry.get("classifier")
+  result = llm.invoke(messages)
 
 Settings is constructed once at the composition root and threaded down
 into anything that needs it. There is deliberately no module-level

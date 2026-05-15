@@ -64,7 +64,7 @@ def check_api_call(settings):
         from langchain_openai import ChatOpenAI
         llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, api_key=settings.openai_api_key)
         response = llm.invoke("Say 'API key works'")
-        print(f"✓ API key verified (test call successful)")
+        print("✓ API key verified (test call successful)")
         print(f"  Response: {response.content}")
         return True
     except ImportError:
