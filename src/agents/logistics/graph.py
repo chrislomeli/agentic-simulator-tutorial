@@ -40,7 +40,6 @@ from __future__ import annotations
 import logging
 
 from langgraph.graph import END, START, StateGraph
-from langgraph.prebuilt import ToolNode
 
 from agents.commons.agent_dependencies import AgentDependencies
 from agents.logistics.nodes import (
@@ -87,7 +86,7 @@ def build_logistics_agent_graph(*, agent_deps: AgentDependencies) -> LogisticsGr
 
     builder.add_node(
         "logistics_agent",
-        make_logistics_agent_node(),
+        make_logistics_agent_node( agent_deps.prompt_registry ),
     )
 
     builder.add_node("extract_plan", make_extract_plan_node())
@@ -95,7 +94,7 @@ def build_logistics_agent_graph(*, agent_deps: AgentDependencies) -> LogisticsGr
     builder.add_conditional_edges(
         "logistics_agent",
         route_after_logistics_agent,
-        {"extract_plan": "extract_plan", END: END},
+        { "extract_plan": "extract_plan", END: END },
     )
 
     builder.add_edge("extract_plan", END)

@@ -32,12 +32,9 @@ Design principles
 
 from __future__ import annotations
 
-import asyncio
-import json
 import logging
 from typing import NamedTuple
 
-from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.store.base import BaseStore
 
 from agents.cluster.state import ClusterAgentState
@@ -235,6 +232,14 @@ def make_evaluate_node(
             }
 
         print(f"""\n{Colors.YELLOW}● NOT CALLING EVALUATOR LLM - Evaluates a single cell and scores fire risk {Colors.RESET}""")
+        
+        system_prompt = prompt_registry.render(
+                "evaluate",
+                {"cluster_id": cluster_id},
+            )
+
+        print(f"""{Colors.TEAL}{system_prompt}{Colors.RESET}""")
+
         risks = [
             CollatedRecordRisk(
                 position=GridPosition(row=cell["row"], col=cell["col"]),

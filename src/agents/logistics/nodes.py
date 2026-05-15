@@ -342,7 +342,9 @@ def make_sector_analysis_node(
 # ── Node: logistics_agent ─────────────────────────────────────────────────────
 
 
-def make_logistics_agent_node():
+def make_logistics_agent_node(
+   prompt_registry: PromptRegistry
+):
     """Factory: binds tools to the LLM at graph-build time.
 
     Parameters
@@ -361,6 +363,14 @@ def make_logistics_agent_node():
         LangGraph's add_messages reducer has already appended the ToolMessages.
         """
         print(f"""{Colors.YELLOW}● NOT CALLING LOGISTICS LLM - Determines equipment and crew availability and issues advisories)  {Colors.RESET}""")
+        
+        system_prompt = prompt_registry.render(
+            "logistics",
+            {"state": state},
+        )
+
+        print(f"""{Colors.TEAL}{system_prompt}{Colors.RESET}""")
+
         response = "Logistics LLM STUB"
         logger.info(
             "logistics_agent LLM response: tool_calls=%d",
