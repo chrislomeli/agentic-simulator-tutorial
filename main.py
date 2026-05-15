@@ -40,7 +40,7 @@ from world import GenericWorldEngine
 # module-level loggers are captured by structlog from the first record.
 configure_logging(level=logging.INFO)
 
-from agents.commons.llm_registry import LLMLabel, build_llm_registry, models  # noqa: E402
+from llm.llm_registry import LLMLabel, build_llm_registry, models  # noqa: E402
 from agents.commons.schemas import CellReadings, CollatedRecordRisk  # noqa: E402
 from config import get_settings  # noqa: E402
 from domains.wildfire.sampler import sample_local_conditions  # noqa: E402

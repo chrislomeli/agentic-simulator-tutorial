@@ -41,7 +41,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.store.base import BaseStore
 
 from agents.cluster.state import ClusterAgentState
-from agents.commons.llm_registry import LLMRegistry
+from llm.llm_registry import LLMRegistry
 from agents.commons.node_executor import node_executor
 from agents.commons.routing import route_base
 from agents.commons.schemas import (
@@ -278,7 +278,7 @@ def make_evaluate_node(
                 for cell in evaluate_cells
         ]
         else:
-            print(f"""\n{Colors.TEAL}● CALLING LLM  {Colors.RESET}""")
+            print(f"""\n{Colors.BLUE}● CALLING LLM  {Colors.RESET}""")
             llm = llm_registry.get("classifier")
             system_prompt = prompt_registry.render(
                 "evaluate",
@@ -290,12 +290,15 @@ def make_evaluate_node(
             async def assess_risk(cell: dict) -> CollatedRecordRisk:
                 human_prompt = json.dumps(cell, default=str, indent=2)
                 async with sem:
-                    return await llm.with_structured_output(CollatedRecordRisk).ainvoke(
+                    response: CollatedRecordRisk = await llm.with_structured_output(CollatedRecordRisk).ainvoke(
                         [
                             SystemMessage(system_prompt),
                             HumanMessage(human_prompt),
                         ]
                     )
+                    print(f"""\n{Colors.TEAL}{response.model_dump_json(indent=2)}{Colors.RESET}""")
+                    return response
+
 
             results = await asyncio.gather(
                 *(assess_risk(c) for c in evaluate_cells),
