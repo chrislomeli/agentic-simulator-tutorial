@@ -35,6 +35,7 @@ from agents.commons.node_executor import node_executor
 from agents.commons.schemas import Direction, SECTOR_ANGLES, SECTOR_VECTORS, Colors
 from agents.commons.state_types import StatusValue
 from agents.logistics.state import LogisticsAgentState
+from prompts import PromptRegistry
 from world import GenericWorldEngine
 from world.cell_state import GenericCell
 

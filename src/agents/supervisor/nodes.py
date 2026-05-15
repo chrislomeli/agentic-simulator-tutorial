@@ -24,8 +24,9 @@ from langgraph.store.base import BaseStore
 from langgraph.types import Send
 
 from agents.cluster.state import ClusterAgentState
-from agents.commons import node_executor
-from agents.commons.schemas import CellReadings, CollatedRecordRisk, Colors
+from agents.commons.node_executor import node_executor
+from agents.commons.routing import route_base
+from agents.commons.schemas import CellReadings, CollatedRecordRisk
 from agents.commons.state_types import StatusValue
 from agents.logistics.state import LogisticsAgentState
 from agents.supervisor.state import RiskScore, SupervisorState
@@ -232,7 +233,7 @@ def route_after_assess(state: SupervisorState) -> str:
         max_score,
         LOGISTICS_RISK_THRESHOLD,
     )
-    return "route_base(state, next_node="report_risk")
+    return route_base(state, next_node="dispatch_commands")
 
 
 def route_after_decide(state: SupervisorState) -> str:

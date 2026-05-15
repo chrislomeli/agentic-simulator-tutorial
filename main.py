@@ -33,12 +33,14 @@ from agents.commons.agent_dependencies import AgentDependencies
 from agents.supervisor.graph import build_supervisor_graph
 from agents.supervisor.state import SupervisorGraph
 from logging_config import configure_logging
+from prompts import PromptRegistry
 from world import GenericWorldEngine
 
 # configure_logging() must come before all project imports so that
 # module-level loggers are captured by structlog from the first record.
 configure_logging(level=logging.INFO)
-# noqa: E402
+
+from agents.commons.schemas import CellReadings, CollatedRecordRisk  # noqa: E402
 from config import get_settings  # noqa: E402
 from domains.wildfire.sampler import sample_local_conditions  # noqa: E402
 from domains.wildfire.scenario_loader import load_scenario_from_db  # noqa: E402
@@ -62,7 +64,11 @@ def build_agent_deps(
     settings.apply_langsmith()
     store = None
 
+    prompt_registry = PromptRegistry()
+    prompt_registry.register_models(CellReadings, CollatedRecordRisk)
+
     return AgentDependencies(
+        prompt_registry=prompt_registry,
         world_engine=engine,
         cell_state_manager=cell_state_manager,
         store=store,

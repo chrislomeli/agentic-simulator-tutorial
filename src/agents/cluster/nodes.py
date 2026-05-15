@@ -173,6 +173,7 @@ def make_update_world_state(
 
 
 def make_evaluate_node(
+    prompt_registry: PromptRegistry,
     world_engine: GenericWorldEngine,
 ):
     """Factory that creates the evaluate node.
@@ -223,7 +224,6 @@ def make_evaluate_node(
           evaluated cell on the world grid.
 
         """
-        print(f"{Colors.GREEN} NODE:: evaluate{Colors.RESET}")
         cells = state.updated_cells
         cluster_id: str = state.cluster_id
 

@@ -1,0 +1,4 @@
+description: "Logistics agent evaluate prompt — wildfire logistics advisor"
+required_vars:
+  - state
+
