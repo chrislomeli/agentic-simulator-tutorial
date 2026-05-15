@@ -138,5 +138,4 @@ class SupervisorState(TracedState):
     # ── Situation summary ────────────────────────────────────────────
     situation_summary: str | None = None
 
-    # ── Logistics plan (written by run_logistics_agent node) ─────────
-    logistics_plan: str | None = None
+
