@@ -134,10 +134,17 @@ class GenericTerrainGrid(Generic[C]):
         if not (0 <= row < self.rows and 0 <= col < self.cols and 0 <= layer < self.layers):
             if warn:
                 import logging
+
                 logger = logging.getLogger(__name__)
                 logger.warning(
                     "Layer item %s at (%d, %d, %d) outside grid bounds (%d×%d×%d)",
-                    layer_id, row, col, layer, self.rows, self.cols, self.layers
+                    layer_id,
+                    row,
+                    col,
+                    layer,
+                    self.rows,
+                    self.cols,
+                    self.layers,
                 )
             return False
         return True

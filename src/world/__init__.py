@@ -27,6 +27,9 @@ and fast enough to generate thousands of scenarios offline.
 
 from world.cell_state import CellState as CellState
 from world.cell_state import GenericCell as GenericCell
+from world.directions import SECTOR_ANGLES as SECTOR_ANGLES
+from world.directions import SECTOR_VECTORS as SECTOR_VECTORS
+from world.directions import Direction as Direction
 from world.environment import EnvironmentState as EnvironmentState
 from world.generic_engine import GenericGroundTruthSnapshot as GenericGroundTruthSnapshot
 from world.generic_engine import GenericWorldEngine as GenericWorldEngine
@@ -35,18 +38,35 @@ from world.grid import FireState as FireState
 from world.grid import TerrainType as TerrainType
 from world.physics import PhysicsModule as PhysicsModule
 from world.physics import StateEvent as StateEvent
+from world.sector_analysis import HotspotSectors as HotspotSectors
+from world.sector_analysis import SectorSummary as SectorSummary
+from world.sector_analysis import StopReason as StopReason
+from world.sector_analysis import analyze_sector as analyze_sector
+from world.sector_analysis import format_stop_reason as format_stop_reason
+from world.sector_analysis import is_wind_aligned as is_wind_aligned
+from world.sector_analysis import trace_sector as trace_sector
 from world.sensor_inventory import SensorInventory as SensorInventory
 
 __all__ = [
     "CellState",
+    "Direction",
     "EnvironmentState",
     "FireState",
     "GenericCell",
     "GenericGroundTruthSnapshot",
     "GenericTerrainGrid",
     "GenericWorldEngine",
+    "HotspotSectors",
     "PhysicsModule",
+    "SECTOR_ANGLES",
+    "SECTOR_VECTORS",
+    "SectorSummary",
     "SensorInventory",
     "StateEvent",
+    "StopReason",
     "TerrainType",
+    "analyze_sector",
+    "format_stop_reason",
+    "is_wind_aligned",
+    "trace_sector",
 ]

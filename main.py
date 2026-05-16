@@ -30,6 +30,7 @@ import asyncio
 import logging
 
 from agents.commons.agent_dependencies import AgentDependencies
+from agents.logistics.state import LogisticsAssessment
 from agents.supervisor.graph import build_supervisor_graph
 from agents.supervisor.state import SupervisorGraph
 from logging_config import configure_logging
@@ -40,14 +41,14 @@ from world import GenericWorldEngine
 # module-level loggers are captured by structlog from the first record.
 configure_logging(level=logging.INFO)
 
-
-from agents.commons.schemas import CellReadings, RiskAssessment, CollatedRecordRisk  # noqa: E402
-from config import get_settings # noqa: E402
-from stores import get_pg_gateway  # noqa: E402
-from agents.commons.llm_registry import LLMLabel, build_llm_registry, models
-from domains.wildfire.sampler import sample_local_conditions  # noqa: E402
-from domains.wildfire.scenario_loader import load_scenario_from_db  # noqa: E402
+from llm.llm_registry import LLM_ROLE_CONFIG, build_llm_registry, models  # noqa: E402
+from agents.commons.schemas import CellReadings, CollatedRecordRisk  # noqa: E402
+from config import get_settings  # noqa: E402
+from world.domains.wildfire.sampler import sample_local_conditions  # noqa: E402
+from world.domains.wildfire.scenario_loader import load_scenario_from_db  # noqa: E402
 from runtime import RuntimeOrchestrator  # noqa: E402
+from stores import get_postgres_data_store  # noqa: E402
+from stores.base import DataStore  # noqa: E402
 from world.cell_state_manager import CellStateManager  # noqa: E402
 
 # Smoke-test cadence — fast enough that the demo finishes in a few
@@ -58,21 +59,18 @@ SMOKE_TICK_INTERVAL_SEC = 0.05
 def build_agent_deps(
     engine: GenericWorldEngine,
     cell_state_manager: CellStateManager,
-    pg_gateway=None,
+    data_store: DataStore | None = None,
 ) -> AgentDependencies:
     """Construct the LLM/prompt/store dependencies for graph compilation."""
     settings = get_settings()
     settings.apply_langsmith()
 
-    llm_registry = build_llm_registry(settings, models, {
-        "classifier": LLMLabel.GPT_MINI,
-        "logistics": LLMLabel.GPT_MINI,
-    })
+    llm_registry = build_llm_registry(settings, models, LLM_ROLE_CONFIG)
 
     store = None
 
     prompt_registry = PromptRegistry()
-    prompt_registry.register_models(CellReadings, CollatedRecordRisk)
+    prompt_registry.register_models(CellReadings, CollatedRecordRisk, LogisticsAssessment)
 
     return AgentDependencies(
         prompt_registry=prompt_registry,
@@ -80,7 +78,7 @@ def build_agent_deps(
         world_engine=engine,
         cell_state_manager=cell_state_manager,
         store=store,
-        pg_gateway=pg_gateway,
+        data_store=data_store,
     )
 
 
@@ -118,19 +116,18 @@ async def run_orchestrator(engine, sensor_inventory, cell_state_manager, agent_d
 
 
 def main() -> None:
-    pg = get_pg_gateway()
+    data_store = get_postgres_data_store()
     try:
-        engine, sensor_inventory = load_scenario_from_db("lpnf-south", pg)
-
+        engine, sensor_inventory = load_scenario_from_db("lpnf-south", data_store)
         cell_state_manager = CellStateManager(
             world_grid=engine.grid,
             sensor_inventory=sensor_inventory,
         )
 
-        agent_dependencies = build_agent_deps(engine, cell_state_manager, pg_gateway=pg)
+        agent_dependencies = build_agent_deps(engine, cell_state_manager, data_store=data_store)
         asyncio.run(run_orchestrator(engine, sensor_inventory, cell_state_manager, agent_dependencies))
     finally:
-        pg.close()
+        data_store.close()
 
 
 if __name__ == "__main__":

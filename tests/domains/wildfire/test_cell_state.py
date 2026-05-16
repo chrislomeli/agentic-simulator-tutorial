@@ -2,7 +2,7 @@
 
 import pytest
 
-from domains.wildfire import (
+from world.domains.wildfire import (
     FireCellState,
     FireState,
     TerrainType,

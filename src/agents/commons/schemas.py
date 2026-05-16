@@ -34,13 +34,24 @@ GridPosition follows GenericTerrainGrid's convention:
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
+from typing import Literal
+from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
 from agents.commons.node_types import NodeError
 from agents.commons.state_types import StatusValue
-from domains.wildfire import FireCellState
+from world.domains.wildfire import FireCellState
+
+
+class Colors:
+    BLUE = "\033[94m"
+    GREEN = "\033[32m"
+    TEAL = "\033[96m"
+    YELLOW = "\033[93m"
+    RED = "\033[91m"
+    RESET = "\033[0m"
 
 
 # ── Base state ───────────────────────────────────────────────────────────────
@@ -198,3 +209,69 @@ class FireCell(BaseModel):
     cell_state: FireCellState
     layer: int
     attributes: dict[str, int] | None = None
+
+
+
+# Agent view of a published advisory
+class ResourceAdvisory(BaseModel):
+    """Structured advisory report for resource deployment decisions."""
+
+    epicenter_row: int = Field(
+        description="Terrain grid row index of the fire risk epicenter (highest-risk cell)."
+    )
+
+    epicenter_column: int = Field(
+        description="Terrain grid column index of the fire risk epicenter (highest-risk cell)."
+    )
+
+    location_description: str = Field(
+        description="Human-readable description of the affected area, especially for impact zones difficult to describe in grid coordinates (e.g., 'northwest slope below ridgeline')."
+    )
+    situation: str = Field(
+        description="Current fire status, spread direction, and immediate threat level. 1-2 sentences."
+    )
+
+    urgency_level: int = Field(
+        ge=1,
+        le=4,
+        description="""How urgent and immediate is this situation?
+
+LEVEL 4 (Fade Out): Lowest readiness; routine monitoring.
+LEVEL 3 (Double Take): Elevated readiness; increased monitoring.
+LEVEL 2 (Fast Pace): High readiness; prepare for deployment.
+LEVEL 1 (Cocked Pistol): Maximum readiness; imminent response required.
+""",
+    )
+    notes: str = Field(
+        description=(
+            "Context, uncertainties, and edge-case reasoning. "
+            "Discuss resource conflicts, conditional scenarios, or cascading risks. "
+            "Example: '3 engines committed to 30%-contained Lompoc fire. "
+            "If 2+ hotspots ignite simultaneously, Level 1 capacity exceeded.'"
+        )
+    )
+    recommendation: str = Field(
+        description="Specific action to take, or 'Monitor only' if no deployment needed."
+    )
+
+
+# Database view of the ResourceAdvisory adds tracking fields
+class ResourceAdvisoryRecord(ResourceAdvisory):
+    id: UUID = Field(default_factory=uuid4, description="Unique identifier. Generated on creation.")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    status: Literal["SENT", "SUPPRESSED", "ACKNOWLEDGED"] = Field(default="SENT")
+
+    def to_db_row(self) -> tuple:
+        """Return tuple for INSERT/UPDATE — computed fields excluded."""
+        return (
+            self.id,
+            self.created_at,
+            self.status,
+            self.epicenter_row,
+            self.epicenter_column,
+            self.location_description,
+            self.situation,
+            self.urgency_level,
+            self.notes,
+            self.recommendation,
+        )

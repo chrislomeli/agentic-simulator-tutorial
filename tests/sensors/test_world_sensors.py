@@ -2,20 +2,20 @@
 
 import pytest
 
-from domains.wildfire.environment import FireEnvironmentState
-from domains.wildfire import FirePhysicsModule
-from domains.wildfire.sampler import sample_local_conditions, sample_thermal_region
-from domains.wildfire.sensors import (
-    TemperatureSensor,
-    HumiditySensor,
-    WindSensor,
-    SmokeSensor,
+from world.domains.wildfire import FirePhysicsModule
+from world.domains.wildfire.environment import FireEnvironmentState
+from world.domains.wildfire.sampler import sample_local_conditions, sample_thermal_region
+from world.domains.wildfire.sensors import (
     BarometricSensor,
+    HumiditySensor,
+    SmokeSensor,
+    TemperatureSensor,
     ThermalCameraSensor,
+    WindSensor,
 )
+from world.transport import SensorEvent
 from world import GenericWorldEngine
 from world.generic_grid import GenericTerrainGrid
-from transport import SensorEvent
 
 
 @pytest.fixture

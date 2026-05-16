@@ -56,9 +56,6 @@ class Settings(BaseSettings):
     openai_api_key: SecretStr | None = None
     ollama_base_url: str = "http://localhost:11434"
 
-    # ── World data ────────────────────────────────────────────────────────────
-    # world_data: str = "src/domains/wildfire/scenario_data/north_south_fire.json"
-
     # ── LangSmith / LangChain tracing ─────────────────────────────────────────
     langchain_api_key: str = ""
     langchain_tracing_v2: bool = False

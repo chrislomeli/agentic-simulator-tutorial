@@ -2,11 +2,11 @@
 
 import pytest
 
-from agents.commons import RiskAssessment, CellReadings
-from agents.commons.agent_dependencies import AgentDependencies
-from agents.commons.llm_registry import LLMRegistry
-from prompts import PromptRegistry
 import agents.cluster.nodes as cluster_nodes
+from agents.commons import CellReadings, RiskAssessment
+from agents.commons.agent_dependencies import AgentDependencies
+from llm.llm_registry import LLMRegistry
+from prompts import PromptRegistry
 
 
 @pytest.fixture(autouse=True)

@@ -27,7 +27,7 @@ from pydantic import Field
 
 from pydantic import BaseModel
 
-from agents.commons.schemas import CollatedRecordRisk, TracedState
+from agents.commons.schemas import CollatedRecordRisk, TracedState, ResourceAdvisory
 
 LogisticsGraph = NewType("LogisticsGraph", CompiledStateGraph)
 
@@ -44,7 +44,6 @@ class LogisticsAssessment(BaseModel):
     needed; a non-empty list signals that upstream logic should widen the
     search, retry, or escalate to a human.
     """
-
     observations: list[str] = Field(
         description="Factual findings from the sector analysis and tool results. "
                     "One item per distinct finding — do not include inferences here."
@@ -58,14 +57,14 @@ class LogisticsAssessment(BaseModel):
         description="Reasoning from observations to conclusion. "
                     "Explain what the data implied and how you weighted it."
     )
-    advisory_sent: bool = Field(
-        description="True if send_advisory was called during this run."
+    advisory_rationale: Annotated[str, Field(min_length=10)] = Field(
+        description="Explain why a ResourceAdvisory was or was not warranted. Minimum 10 characters."
     )
-    advisory_rationale: str = Field(
-        description="Why an advisory was or was not sent. "
-                    "If sent, name the trigger (e.g. wind-aligned URBAN sector). "
-                    "If not sent, state why escalation was not warranted."
+    advisory: ResourceAdvisory | None = Field(
+        default=None,
+        description="Populate with a ResourceAdvisory if conditions warrant one; leave null otherwise."
     )
+
 
 
 class LogisticsAgentState(TracedState):

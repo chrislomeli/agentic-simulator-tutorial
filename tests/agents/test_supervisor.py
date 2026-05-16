@@ -1,21 +1,17 @@
 """Tests for agents.supervisor — state reducers, node functions, graph."""
 
-import pytest
 from langgraph.graph import END
-from langgraph.store.memory import InMemoryStore
 
 from agents.cluster.graph import build_cluster_agent_graph
 from agents.cluster.state import ClusterAgentState
-from agents.commons.agent_dependencies import AgentDependencies
 from agents.commons.schemas import (
     CellReadings,
     CollatedRecordRisk,
     GridPosition,
 )
 from agents.commons.state_types import StatusValue
-from agents.supervisor.graph import build_supervisor_graph
-from langgraph.graph.state import CompiledStateGraph
 from agents.supervisor.nodes import (
+    LOGISTICS_RISK_THRESHOLD,
     assess_situation,
     decide_actions,
     fan_out_to_clusters,
@@ -23,16 +19,13 @@ from agents.supervisor.nodes import (
     make_run_cluster_agent,
     route_after_assess,
     route_after_decide,
-    LOGISTICS_RISK_THRESHOLD,
 )
 from agents.supervisor.state import (
-    ActuatorCommand,
-    SupervisorGraph,
+    RiskScore,
     SupervisorState,
     max_cluster_score,
-    merge_cluster_findings, RiskScore,
+    merge_cluster_findings,
 )
-
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 

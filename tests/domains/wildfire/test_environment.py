@@ -1,9 +1,10 @@
 """Tests for world-simiulator.domains.wildfire.environment."""
 
 import random
+
 import pytest
 
-from domains.wildfire.environment import FireEnvironmentState
+from world.domains.wildfire.environment import FireEnvironmentState
 
 
 @pytest.fixture(autouse=True)

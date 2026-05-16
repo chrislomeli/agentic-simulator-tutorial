@@ -16,7 +16,7 @@ The ReAct loop
 1. sector_analysis scans the world grid for hotspots (cells with
    cell.risk_assessment.risk_score >= threshold), produces an 8-sector
    radial summary per hotspot, and writes it into state.situation_summary.
-2. logistics_agent calls the LLM with that summary plus pg_gateway tools.
+2. logistics_agent calls the LLM with that summary plus data_store tools.
 3. If the LLM returns tool calls, ToolNode executes them and appends
    ToolMessages to state.messages. Then logistics_agent is called again.
 4. When the LLM returns a plain text response (no tool calls), the router
@@ -25,14 +25,15 @@ The ReAct loop
 Construction
 ────────────
 ``build_logistics_agent_graph`` is the only public entry point. It receives
-AgentDependencies (carries the world_engine, PgGateway, and LLMRegistry).
+AgentDependencies (carries the world_engine, DataStore, and LLMRegistry).
 
 Tools are built only when the required dependency is available:
-  - get_wildfire_activity: requires pg_gateway != None
-  - get_resources_within : requires pg_gateway != None
-  - send_advisory        : requires pg_gateway != None
+  - get_wildfire_activity: requires data_store != None
+  - get_resources_within : requires data_store != None
 
-Missing dependencies → fewer tools, not a crash.
+The advisory is not a tool. extract_plan produces a LogisticsAssessment via
+structured output; if assessment.advisory is not None, extract_plan dispatches
+it to the DB directly. Missing dependencies → fewer tools, not a crash.
 """
 
 from __future__ import annotations
@@ -50,6 +51,8 @@ from agents.logistics.nodes import (
     route_after_logistics_agent,
 )
 from agents.logistics.state import LogisticsAgentState, LogisticsGraph
+from tools.resources import make_get_resources_within
+from tools.wildfires import make_get_wildfire_activity
 
 logger = logging.getLogger(__name__)
 
@@ -62,34 +65,30 @@ def build_logistics_agent_graph(*, agent_deps: AgentDependencies) -> LogisticsGr
     agent_deps : AgentDependencies
         DI container. Relevant fields:
           - world_engine  : grid that sector_analysis scans for hotspots
-          - pg_gateway    : Postgres connection (for resources + wildfire tools)
+          - data_store    : DataStore facade (resources + wildfire + advisory tools)
           - llm_registry  : LLM lookup by role (for logistics_agent node)
     """
     tools = _build_tools(agent_deps)
-    logger.info("Logistics agent built with %d tool(s): %s", len(tools), [t.name for t in tools])
 
     builder = StateGraph(LogisticsAgentState)
 
-    # Add sector analysis node if world_engine available
-    if agent_deps.world_engine is not None:
-        builder.add_node(
-            "sector_analysis",
-            make_sector_analysis_node(
-                world_engine=agent_deps.world_engine,
-                risk_threshold=5,
-                max_sector_miles=20.0
-            )
+    builder.add_node(
+        "sector_analysis",
+        make_sector_analysis_node(
+            world_engine=agent_deps.world_engine,
+            risk_threshold=5,
+            max_sector_miles=20.0
         )
-        builder.add_edge(START, "sector_analysis")
-        builder.add_edge("sector_analysis", "logistics_agent")
-    else:
-        logger.warning("world_engine not available — sector_analysis skipped, proceeding to logistics_agent")
-        builder.add_edge(START, "logistics_agent")
-
-    builder.add_node("logistics_agent", make_logistics_agent_node(tools, agent_deps.prompt_registry, agent_deps.llm_registry))
+    )
+    builder.add_node("logistics_agent",
+                     make_logistics_agent_node(tools, agent_deps.prompt_registry, agent_deps.llm_registry))
     builder.add_node("tools", ToolNode(tools))
-    builder.add_node("extract_plan", make_extract_plan_node(agent_deps.llm_registry))
+    advisory_repo = agent_deps.data_store.advisories if agent_deps.data_store is not None else None
+    builder.add_node("extract_plan",
+                     make_extract_plan_node(agent_deps.prompt_registry, agent_deps.llm_registry, advisory_repo))
 
+    builder.add_edge(START, "sector_analysis")
+    builder.add_edge("sector_analysis", "logistics_agent")
     builder.add_conditional_edges(
         "logistics_agent",
         route_after_logistics_agent,
@@ -103,16 +102,11 @@ def build_logistics_agent_graph(*, agent_deps: AgentDependencies) -> LogisticsGr
 
 def _build_tools(agent_deps: AgentDependencies) -> list:
     """Build the tool list from available dependencies."""
-    from agents.logistics.tools.resources import make_get_resources_within
-    from agents.logistics.tools.wildfires import make_get_wildfire_activity
-    from agents.logistics.tools.advisory import make_send_advisory
-
     tools = []
 
-    if agent_deps.pg_gateway is not None:
-        tools.append(make_get_wildfire_activity(agent_deps.pg_gateway))
-        tools.append(make_get_resources_within(agent_deps.pg_gateway))
-        tools.append(make_send_advisory(agent_deps.pg_gateway))
+    if agent_deps.data_store is not None:
+        tools.append(make_get_wildfire_activity(agent_deps.data_store.wildfires))
+        tools.append(make_get_resources_within(agent_deps.data_store.terrain, agent_deps.data_store.resources))
     else:
         logger.warning("pg_gateway not available — resource and wildfire tools skipped")
 

@@ -1,12 +1,10 @@
 """Tests for the sector_analysis node in agents.logistics."""
 
-import pytest
 
 from agents.commons.schemas import CellRiskAssessment
 from agents.commons.state_types import StatusValue
 from agents.logistics.nodes import make_sector_analysis_node
 from agents.logistics.state import LogisticsAgentState
-
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 

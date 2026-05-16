@@ -1,14 +1,13 @@
 """Tests for world-simiulator.domains.wildfire.rothermel_physics."""
 
-import math
 import random
 
 import pytest
 
-from domains.wildfire import FireCellState, FireState, TerrainType
-from domains.wildfire.environment import FireEnvironmentState
-from domains.wildfire.fuel_models import FUEL_MODELS
-from domains.wildfire.rothermel_physics import RothermelFirePhysicsModule
+from world.domains.wildfire import FireCellState, FireState, TerrainType
+from world.domains.wildfire.environment import FireEnvironmentState
+from world.domains.wildfire.fuel_models import FUEL_MODELS
+from world.domains.wildfire.rothermel_physics import RothermelFirePhysicsModule
 from world.generic_grid import GenericTerrainGrid
 from world.physics import PhysicsModule
 

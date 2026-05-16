@@ -27,7 +27,8 @@ from langgraph.graph import END, START, StateGraph
 from agents.cluster.nodes import (
     make_evaluate_node,
     make_report_risk_node,
-    route_after_evaluate, make_update_world_state,
+    make_update_world_state,
+    route_after_evaluate,
 )
 from agents.cluster.state import ClusterAgentState, StreamingRiskGraph
 from agents.commons.agent_dependencies import AgentDependencies

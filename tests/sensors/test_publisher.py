@@ -4,10 +4,9 @@ import asyncio
 
 import pytest
 
-from sensors.base import SensorBase, FailureMode
-from sensors import SensorPublisher
-from transport import SensorEventQueue
-from transport import SensorEvent
+from world.sensors import SensorPublisher
+from world.sensors.base import FailureMode, SensorBase
+from world.transport import SensorEvent, SensorEventQueue
 from world.sensor_inventory import SensorInventory
 
 

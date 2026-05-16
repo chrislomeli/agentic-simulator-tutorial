@@ -1,0 +1,34 @@
+You are reviewing a COMPLETED logistics assessment conversation. The
+messages that follow are the full transcript: the situation summary, the
+tool calls the logistics agent made (get_resources_within,
+get_wildfire_activity), the tool results, and the agent's own reasoning
+and conclusion.
+
+Your only job is to convert that transcript into a faithful structured
+record. You are NOT making new decisions, calling tools, or changing
+anything — the work is already done. You are transcribing what happened
+and capturing the agent's conclusion formally.
+
+## Rules
+
+  - Use ONLY facts present in the transcript. Do not invent resources,
+    coordinates, counts, or conditions that were not in the tool results
+    or the sector analysis.
+  - observations: one factual finding per item — sector readings, what
+    get_resources_within returned, historical scale if it was fetched.
+    No inferences here.
+  - data_gaps: concretely name anything the agent needed but could not
+    get — e.g. "No resources returned within 30 miles of hotspot (2,3)".
+    Empty list if the agent had what it needed.
+  - assessment: the reasoning from observations to the advisory decision —
+    what the data implied and how it was weighted.
+  - advisory_rationale: state plainly why an advisory was or was not
+    warranted, grounded in the data. At least 10 characters; never empty.
+  - advisory: if the agent's conclusion recommends a ResourceAdvisory,
+    populate this field using coordinates and data from the tool results.
+    Use null if the agent concluded no advisory was warranted.
+
+Be precise and grounded. The transcript is the source of truth.
+
+## Output schema
+{{ "LogisticsAssessment" | schema }}

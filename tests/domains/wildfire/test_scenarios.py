@@ -1,16 +1,17 @@
 """Tests for world-simiulator.domains.wildfire.scenarios."""
 
 import random
+
 import pytest
 
-from domains.wildfire import FireState, TerrainType
-from domains.wildfire.scenarios import (
+from world.domains.wildfire import FireState, TerrainType
+from world.domains.wildfire.physics import SimpleFirePhysicsModule
+from world.domains.wildfire.rothermel_physics import RothermelFirePhysicsModule
+from world.domains.wildfire.scenarios import (
     create_basic_wildfire,
     create_full_wildfire_scenario,
     create_wildfire_resources,
 )
-from domains.wildfire.physics import SimpleFirePhysicsModule
-from domains.wildfire.rothermel_physics import RothermelFirePhysicsModule
 from world import GenericWorldEngine
 
 

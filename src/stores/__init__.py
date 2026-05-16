@@ -1,22 +1,36 @@
-"""stores — All persistence classes, re-exported for convenience.
+"""stores — Data-access facade and concrete backend implementations.
 
-Import from here:  ``from stores import SensorRepository, ResourceRepository``
+The agent layer depends on `DataStore` (an ABC). The Postgres
+implementation lives in `stores.postgres`; future SQLite / JSON backends
+would sit alongside it. Domain schemas (Resource, Sensor, Terrain,
+WildfireActivity) are backend-agnostic and live at the package root.
 """
 
-from stores.pg_gateway import PgGateway, get_pg_gateway
-from stores.sensor_repo import SensorRepository
-from stores.terrain_repo import TerrainRepository
-from stores.wildfire_repo import WildfireRepository
-from stores.resources_repo import TranscriptRepository as ResourceRepository
+from stores.base import (
+    AdvisoryRepository,
+    DataStore,
+    ResourceRepository,
+    SensorRepository,
+    TerrainConfig,
+    TerrainRepository,
+    WildfireRepository,
+)
+from stores.postgres.data_store import PostgresDataStore, get_postgres_data_store
 from stores.schemas import Resource, Sensor, Terrain, WildfireActivity
 
 __all__ = [
-    "PgGateway",
-    "get_pg_gateway",
+    # ABCs (the public contract)
+    "AdvisoryRepository",
+    "DataStore",
+    "ResourceRepository",
     "SensorRepository",
+    "TerrainConfig",
     "TerrainRepository",
     "WildfireRepository",
-    "ResourceRepository",
+    # Postgres impl entry points
+    "PostgresDataStore",
+    "get_postgres_data_store",
+    # Schemas
     "Resource",
     "Sensor",
     "Terrain",

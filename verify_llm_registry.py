@@ -2,7 +2,6 @@
 """Verify that the LLM registry builds correctly and each role can make a live call."""
 
 import sys
-import os
 
 sys.path.insert(0, "src")
 
@@ -15,7 +14,6 @@ def check_settings():
         print(f"✗ Failed to load settings: {e}")
         return None
 
-    ok = True
     if settings.anthropic_api_key:
         print("✓ anthropic_api_key loaded")
     else:
@@ -31,7 +29,7 @@ def check_settings():
 
 def check_registry(settings):
     try:
-        from config import build_llm_registry, models, LLM_ROLE_CONFIG
+        from config import LLM_ROLE_CONFIG, build_llm_registry, models
         registry = build_llm_registry(settings, models, LLM_ROLE_CONFIG)
     except Exception as e:
         print(f"✗ Failed to build registry: {e}")

@@ -35,27 +35,27 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from typing import NamedTuple
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langgraph.constants import END
 from langgraph.store.base import BaseStore
 
 from agents.cluster.state import ClusterAgentState
-from agents.commons.llm_registry import LLMRegistry
 from agents.commons.node_executor import node_executor
 from agents.commons.routing import route_base
 from agents.commons.schemas import (
     CellReadings,
     CellRiskAssessment,
     CollatedRecordRisk,
+    Colors,
     GridPosition,
-    RiskAssessment,
 )
 from agents.commons.state_types import StatusValue
-from domains.wildfire import FireCellState
-from world import GenericWorldEngine, GenericCell
-from world.cell_state_manager import CellStateManager
+from llm.llm_registry import LLMRegistry
 from prompts import PromptRegistry
+from world import GenericCell, GenericWorldEngine
+from world.cell_state_manager import CellStateManager
+from world.domains.wildfire import FireCellState
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +75,6 @@ STUB_RISK_SCORE = False
 # are absent — the most conservative gate, only bypassing obviously safe cells.
 HEURISTIC_EVALUATE_THRESHOLD = 3
 
-from typing import NamedTuple
 
 class ReadingKey(NamedTuple):
     row: int
@@ -83,8 +82,10 @@ class ReadingKey(NamedTuple):
     rtype: str  # 'type' is reserved, use rtype or metric_type
     value: float
 
+
 def generic_to_fire():
     pass
+
 
 # ── Node: update world ────────────────────────────────────────────────────────
 def make_update_world_state(
@@ -104,6 +105,7 @@ def make_update_world_state(
     The list of cell dicts is what the evaluate node hands to the LLM.
     """
 
+    @node_executor("update_world")
     def update_world(state: ClusterAgentState):
         readings: list[CellReadings] = state.readings
         grid = world_engine.grid
@@ -117,7 +119,8 @@ def make_update_world_state(
         total_metrics = sum(len(cell.metrics) for cell in readings)
         logger.debug(
             "Deduplicated %d raw metrics into %d unique readings",
-            total_metrics, len(unique_readings),
+            total_metrics,
+            len(unique_readings),
         )
 
         affected_cells: dict = {}
@@ -225,7 +228,6 @@ def make_evaluate_node(
           evaluated cell on the world grid.
 
         """
-
         cells = state.updated_cells
         cluster_id: str = state.cluster_id
 
@@ -239,13 +241,20 @@ def make_evaluate_node(
         # Split on heuristic score — only call the LLM for cells that have at
         # least one risk factor present. Cells below the threshold are assigned
         # risk_score=0 with high confidence: the heuristic says nothing is there.
-        evaluate_cells = [c for c in cells if c.get("heuristic_score", 0) >= HEURISTIC_EVALUATE_THRESHOLD]
-        skip_cells = [c for c in cells if c.get("heuristic_score", 0) < HEURISTIC_EVALUATE_THRESHOLD]
+        evaluate_cells = [
+            c for c in cells if c.get("heuristic_score", 0) >= HEURISTIC_EVALUATE_THRESHOLD
+        ]
+        skip_cells = [
+            c for c in cells if c.get("heuristic_score", 0) < HEURISTIC_EVALUATE_THRESHOLD
+        ]
 
         if skip_cells:
             logger.info(
                 "ClusterAgent[%s] heuristic gate: skipping %d/%d cells (score < %d)",
-                cluster_id, len(skip_cells), len(cells), HEURISTIC_EVALUATE_THRESHOLD,
+                cluster_id,
+                len(skip_cells),
+                len(cells),
+                HEURISTIC_EVALUATE_THRESHOLD,
             )
 
         skipped_risks = [
@@ -258,17 +267,17 @@ def make_evaluate_node(
             )
             for c in skip_cells
         ]
-
-        blue = "\033[34m"
-        green = "\033[32m"
-        reset = "\033[0m"
+        if not evaluate_cells:
+            print(
+                f"""\n{Colors.YELLOW}● not CALLING LLM - no potential hotspots found {Colors.RESET}"""
+            )
 
         if STUB_RISK_SCORE:
-            print(f"""\n{blue}● CALLING LLM STUB {reset}""")
+            print(f"""\n{Colors.BLUE}● CALLING LLM STUB {Colors.RESET}""")
             llm_risks = [
                 CollatedRecordRisk(
                     position=GridPosition(row=cell["row"], col=cell["col"]),
-                    risk_score=5,
+                    risk_score=10,
                     confidence=3,
                     confidence_rationale="Stub score — LLM not active in this milestone.",
                     contributing_factors=["stub"],
@@ -276,7 +285,6 @@ def make_evaluate_node(
                 for cell in evaluate_cells
             ]
         else:
-            print(f"""\n{green}● CALLING LLM  {reset}""")
             llm = llm_registry.get("classifier")
             system_prompt = prompt_registry.render(
                 "evaluate",
@@ -285,7 +293,8 @@ def make_evaluate_node(
 
             sem = asyncio.Semaphore(max_concurrency)
 
-            async def assess_risk(cell: dict) -> CollatedRecordRisk:
+            async def assess_risk(cell: dict) -> CollatedRecordRisk | BaseException:
+                print(f"""\n{Colors.BLUE}● CALLING LLM  {Colors.RESET}""")
                 human_prompt = json.dumps(cell, default=str, indent=2)
                 async with sem:
                     return await llm.with_structured_output(CollatedRecordRisk).ainvoke(
@@ -304,9 +313,13 @@ def make_evaluate_node(
                 if isinstance(result, BaseException):
                     logger.error(
                         "ClusterAgent[%s] assess_risk failed for cell (%s,%s): %s",
-                        cluster_id, cell["row"], cell["col"], result,
+                        cluster_id,
+                        cell["row"],
+                        cell["col"],
+                        result,
                     )
                 else:
+                    print(f"""\n{Colors.TEAL}{result.model_dump_json(indent=2)}{Colors.RESET}""")
                     llm_risks.append(result)
 
         risks = skipped_risks + llm_risks
@@ -332,9 +345,7 @@ def make_evaluate_node(
 # ── Node: report_risk ─────────────────────────────────────────────────────────
 
 
-def make_report_risk_node(
-        world_engine: GenericWorldEngine,
-        store: BaseStore | None = None):
+def make_report_risk_node(world_engine: GenericWorldEngine, store: BaseStore | None = None):
     """Factory that creates the risk reporting node.
 
     Parameters
@@ -415,5 +426,3 @@ def route_after_evaluate(state: ClusterAgentState) -> str:
       - otherwise           → "report_risk"
     """
     return route_base(state, next_node="report_risk")
-
-

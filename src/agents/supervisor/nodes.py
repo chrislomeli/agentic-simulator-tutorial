@@ -37,6 +37,7 @@ logger = logging.getLogger(__name__)
 # ── Conditional edge: dynamic fan-out ────────────────────────────────────────
 
 
+@node_executor("fan_out_to_clusters")
 def fan_out_to_clusters(state: SupervisorState) -> list[Send]:
     """Dynamic fan-out — one ``Send`` per active cluster.
 
@@ -220,15 +221,17 @@ def route_after_assess(state: SupervisorState) -> str:
     if max_score >= LOGISTICS_RISK_THRESHOLD:
         logger.info(
             "route_after_assess: max score %d >= %d — invoking logistics agent",
-            max_score, LOGISTICS_RISK_THRESHOLD,
+            max_score,
+            LOGISTICS_RISK_THRESHOLD,
         )
         return "run_logistics_agent"
 
     logger.info(
         "route_after_assess: max score %d < %d — skipping logistics",
-        max_score, LOGISTICS_RISK_THRESHOLD,
+        max_score,
+        LOGISTICS_RISK_THRESHOLD,
     )
-    return "dispatch_commands"
+    return route_base(state, next_node="dispatch_commands")
 
 
 def route_after_decide(state: SupervisorState) -> str:

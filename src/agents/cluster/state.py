@@ -33,7 +33,6 @@ Node responsibilities
 
 from __future__ import annotations
 
-import operator
 import uuid
 from typing import Annotated, NewType
 

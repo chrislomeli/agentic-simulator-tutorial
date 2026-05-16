@@ -1,13 +1,13 @@
 """Tests for world-simiulator.domains.wildfire.physics."""
 
 import random
+
 import pytest
 
-from domains.wildfire import FireCellState, FireState, TerrainType
-from domains.wildfire.environment import FireEnvironmentState
-from domains.wildfire import FirePhysicsModule
-from world.generic_grid import GenericTerrainGrid
+from world.domains.wildfire import FireCellState, FirePhysicsModule, FireState, TerrainType
+from world.domains.wildfire.environment import FireEnvironmentState
 from world import StateEvent
+from world.generic_grid import GenericTerrainGrid
 
 
 @pytest.fixture(autouse=True)

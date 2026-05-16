@@ -5,7 +5,6 @@ import pytest
 from world.cell_state import CellState
 from world.generic_grid import GenericTerrainGrid
 
-
 # ── Test cell state ──────────────────────────────────────────────────────────
 
 class ToyState(CellState):

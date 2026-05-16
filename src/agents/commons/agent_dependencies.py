@@ -12,9 +12,9 @@ from __future__ import annotations
 from langgraph.store.base import BaseStore
 from pydantic import BaseModel
 
-from agents.commons.llm_registry import LLMRegistry
+from llm.llm_registry import LLMRegistry
 from prompts import PromptRegistry
-from stores.pg_gateway import PgGateway
+from stores.base import DataStore
 from world import GenericWorldEngine
 from world.cell_state_manager import CellStateManager
 
@@ -22,9 +22,9 @@ from world.cell_state_manager import CellStateManager
 class AgentDependencies(BaseModel):
     model_config = {"arbitrary_types_allowed": True}
 
-    llm_registry: LLMRegistry | None
+    llm_registry: LLMRegistry
     prompt_registry: PromptRegistry
-    pg_gateway: PgGateway | None = None
-    world_engine: GenericWorldEngine | None
-    cell_state_manager: CellStateManager | None = None
+    data_store: DataStore
+    world_engine: GenericWorldEngine
+    cell_state_manager: CellStateManager
     store: BaseStore | None = None

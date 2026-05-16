@@ -44,9 +44,9 @@ from agents.commons.schemas import (
     GridPosition,
     Metric,
 )
-from transport.schemas import SensorEvent
 from world.coverage_index import CoverageIndex
 from world.sensor_inventory import SensorInventory
+from world.transport import SensorEvent
 
 logger = logging.getLogger(__name__)
 
@@ -149,19 +149,19 @@ def resolve_position(
 # wind_direction) are omitted from the trend block.
 _TREND_THRESHOLDS: dict[str, dict[str, float]] = {
     "temperature": {
-        "rising_fast": 2.0,    # °C / min
+        "rising_fast": 2.0,  # °C / min
         "rising": 0.5,
         "falling": -0.5,
         "falling_fast": -2.0,
     },
     "humidity": {
-        "rising_fast": 5.0,    # % / min — drying is dangerous, but both directions reported
+        "rising_fast": 5.0,  # % / min — drying is dangerous, but both directions reported
         "rising": 2.0,
         "falling": -2.0,
         "falling_fast": -5.0,
     },
     "wind_speed": {
-        "rising_fast": 3.0,    # m/s / min
+        "rising_fast": 3.0,  # m/s / min
         "rising": 1.0,
         "falling": -1.0,
         "falling_fast": -3.0,

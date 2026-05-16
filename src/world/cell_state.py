@@ -101,8 +101,7 @@ class GenericCell(Generic[C]):
         cell_state: C,
         layer: int = 0,
         attributes: dict[str, Any] | None = None,
-        heuristic: int = 0
-
+        heuristic: int = 0,
     ) -> None:
         self.row = row
         self.col = col
@@ -111,7 +110,6 @@ class GenericCell(Generic[C]):
         self.attributes = attributes or {}
         self.risk_assessment = None
         self.heuristic = 0
-
 
     def to_dict(self) -> dict[str, Any]:
         """Serialise for snapshots and logging."""

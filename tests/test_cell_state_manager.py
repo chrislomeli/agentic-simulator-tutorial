@@ -16,9 +16,8 @@ import pytest
 
 pytest.skip("Pending port to post-refactor CellStateManager API", allow_module_level=True)
 
-import sys
-from datetime import UTC, datetime
-from pathlib import Path
+import sys  # noqa: E402
+from pathlib import Path  # noqa: E402
 
 # ── Make src importable ──────────────────────────────────────────────────────
 ROOT = Path(__file__).resolve().parent.parent
@@ -26,20 +25,19 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from domains.wildfire.cell_state import FireCellState, TerrainType
-from domains.wildfire.environment import FireEnvironmentState
-from domains.wildfire.physics import SimpleFirePhysicsModule
-from domains.wildfire.sensors import TemperatureSensor, HumiditySensor, WindSensor
-from transport.schemas import SensorEvent
-from world.cell_state_manager import (
+from world.domains.wildfire.cell_state import FireCellState, TerrainType  # noqa: E402
+from world.domains.wildfire.environment import FireEnvironmentState  # noqa: E402
+from world.domains.wildfire.physics import SimpleFirePhysicsModule  # noqa: E402
+from world.domains.wildfire.sensors import HumiditySensor, TemperatureSensor, WindSensor  # noqa: E402
+from world.transport import SensorEvent  # noqa: E402
+from world.cell_state_manager import (  # noqa: E402
     CellStateManager,
     EvaluationThresholds,
 )
-from world.generic_engine import GenericWorldEngine
-from world.generic_grid import GenericTerrainGrid
-from world.risk_heat_map import RiskHeatMap
-from world.sensor_inventory import SensorInventory
-
+from world.generic_engine import GenericWorldEngine  # noqa: E402
+from world.generic_grid import GenericTerrainGrid  # noqa: E402
+from world.risk_heat_map import RiskHeatMap  # noqa: E402
+from world.sensor_inventory import SensorInventory  # noqa: E402
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
