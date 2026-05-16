@@ -155,17 +155,17 @@ erDiagram
 
 Each directory is a standalone runnable project. The table shows exactly what each step adds over the previous one.
 
-| Step | Directory | What it adds |
-|------|-----------|--------------|
-| 01 | `agentic-simulator-step_01` | **World engine** — Rothermel fire physics, terrain grid, wildfire domain cell states, sensor inventory, `SensorPublisher`, `SensorEventQueue`, PostgreSQL + mock store backends |
-| 02 | `agentic-simulator-step_02` | **Supervisor graph + orchestrator skeleton** — `RuntimeOrchestrator` wires publisher → queue → `CellStateManager` → supervisor; all graph nodes are passthrough stubs |
-| 03 | `agentic-simulator-step_03` | **Cluster (risk) agent skeleton** — `ClusterAgentState`, `update_world → evaluate → report_risk` subgraph; supervisor fans out via Send API; `evaluate` returns deterministic stub scores |
-| 04 | `agentic-simulator-step_04` | **Logistics agent skeleton** — `LogisticsAgentState`, `logistics_agent → tools → extract_plan` subgraph wired into the supervisor after `assess_situation` |
-| 05 | `agentic-simulator-step_05` | **`@node_executor` decorator** — wraps all node functions with per-node timing, structured exception capture, and `session_id` tracing; `TracedState` base class added |
-| 06 | `agentic-simulator-step_06` | **Jinja2 prompt registry** — `PromptRegistry` loads versioned templates from `prompts/templates/<name>/<version>/prompt.j2`; all agent nodes switch to rendered prompts |
-| 07 | `agentic-simulator-step_07` | **LLM registry + cluster agent live** — `LLMRegistry` routes roles to providers (STUB / OpenAI / Anthropic / Ollama); cluster agent `evaluate` node makes real structured-output LLM calls |
-| 08 | `agentic-simulator-step_08` | **Logistics tools + logistics agent live** — `sector_heatmap`, `nearby_resources`, `fire_behavior_query` tools implemented; logistics ReAct loop makes real LLM calls; prompt templates added |
-| 09 | `agentic-simulator-step_09` | **Advisory dispatch completed** — `dispatch_advisory` writes `ResourceAdvisory` to the advisory store; logistics prompts refined; full end-to-end pipeline operational |
+| branch   | Directory | What it adds                                                                                                                                                                                    |
+|----------|-----------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| step_01  | `agentic-simulator-step_01` | **World engine** — Rothermel fire physics, terrain grid, wildfire domain cell states, sensor inventory, `SensorPublisher`, `SensorEventQueue`, PostgreSQL + mock store backends                 |
+| step_02  | `agentic-simulator-step_02` | **Supervisor graph + orchestrator skeleton** — `RuntimeOrchestrator` wires publisher → queue → `CellStateManager` → supervisor; all graph nodes are passthrough stubs                           |
+| step_03  | `agentic-simulator-step_03` | **Cluster (risk) agent skeleton** — `ClusterAgentState`, `update_world → evaluate → report_risk` subgraph; supervisor fans out via Send API; `evaluate` returns deterministic stub scores       |
+| step_04  | `agentic-simulator-step_04` | **Logistics agent skeleton** — `LogisticsAgentState`, `logistics_agent → tools → extract_plan` subgraph wired into the supervisor after `assess_situation`                                      |
+| step_05  | `agentic-simulator-step_05` | **`@node_executor` decorator** — wraps all node functions with per-node timing, structured exception capture, and `session_id` tracing; `TracedState` base class added                          |
+| step_06  | `agentic-simulator-step_06` | **Jinja2 prompt registry** — `PromptRegistry` loads versioned templates from `prompts/templates/<name>/<version>/prompt.j2`; all agent nodes switch to rendered prompts                         |
+| step_07  | `agentic-simulator-step_07` | **LLM registry + cluster agent live** — `LLMRegistry` routes roles to providers (STUB / OpenAI / Anthropic / Ollama); cluster agent `evaluate` node makes real structured-output LLM calls      |
+| step_08  | `agentic-simulator-step_08` | **Logistics tools + logistics agent live** — `sector_heatmap`, `nearby_resources`, `fire_behavior_query` tools implemented; logistics ReAct loop makes real LLM calls; prompt templates added   |
+| step_09  | `agentic-simulator-step_09` | **Advisory dispatch completed** — `dispatch_advisory` writes `ResourceAdvisory` to the advisory store; logistics prompts refined; full end-to-end pipeline operational                          |
 
 ---
 
