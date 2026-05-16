@@ -23,9 +23,11 @@ from typing import Annotated, NewType
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
 from langgraph.graph.state import CompiledStateGraph
-from pydantic import BaseModel, Field
+from pydantic import Field
 
-from agents.commons.schemas import CollatedRecordRisk, TracedState
+from pydantic import BaseModel
+
+from agents.commons.schemas import CollatedRecordRisk, TracedState, ResourceAdvisory
 
 LogisticsGraph = NewType("LogisticsGraph", CompiledStateGraph)
 
@@ -42,26 +44,24 @@ class LogisticsAssessment(BaseModel):
     needed; a non-empty list signals that upstream logic should widen the
     search, retry, or escalate to a human.
     """
-
     observations: list[str] = Field(
         description="Factual findings from the sector analysis and tool results. "
-        "One item per distinct finding — do not include inferences here."
+                    "One item per distinct finding — do not include inferences here."
     )
     data_gaps: list[str] = Field(
         description="Specific inputs that were missing or unavailable. "
-        "Name the gap concretely: 'No available resources found within "
-        "30 miles of hotspot (2,3)' not 'resource data was limited'."
+                    "Name the gap concretely: 'No available resources found within "
+                    "30 miles of hotspot (2,3)' not 'resource data was limited'."
     )
     assessment: str = Field(
         description="Reasoning from observations to conclusion. "
-        "Explain what the data implied and how you weighted it."
+                    "Explain what the data implied and how you weighted it."
     )
-    advisory_sent: bool = Field(description="True if send_advisory was called during this run.")
-    advisory_rationale: str = Field(
-        description="Why an advisory was or was not sent. "
-        "If sent, name the trigger (e.g. wind-aligned URBAN sector). "
-        "If not sent, state why escalation was not warranted."
+    reason_for_no_advisory: Annotated[str, Field(min_length=10)] = Field(
+        description="Explain why you did or did not send a ResourceAdvisory. Minimum 10 characters."
     )
+    advisory: list[ResourceAdvisory] = Field(default_factory=list, description="Any advisory that was sent")
+
 
 
 class LogisticsAgentState(TracedState):

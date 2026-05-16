@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 
+from agents.commons.schemas import ResourceAdvisoryRecord
 from stores.base import AdvisoryRepository as AdvisoryRepositoryBase
 from stores.postgres.gateway import PgGateway
 
@@ -101,7 +102,6 @@ if __name__ == "__main__":
     """Quick sanity check: create spoof advisories, save, retrieve."""
     import sys
 
-    from tools.advisory import ResourceAdvisoryRecord
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 

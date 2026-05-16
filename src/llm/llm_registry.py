@@ -120,12 +120,25 @@ models: dict[LLMLabel, LLMModel | None] = {
 
 
 # ── Role → model label mapping ────────────────────────────────────────────────
-# Maps agent role → LLMLabel.
-# Change a label here to swap the model for that role everywhere.
+# Maps agent role → LLMLabel. This is the SINGLE source of truth: the
+# composition root (main.py) builds the registry from this dict. Change a
+# label here to swap the model for that role everywhere.
+#
+# Only roles that are actually consumed via llm_registry.get(<role>) belong
+# here — listing a role nothing requests is just a lie waiting to mislead.
+# Consumers today:
+#   - "classifier"        : cluster agent  (agents/cluster/nodes.py)
+#   - "logistics"         : logistics ReAct loop, Phase 1 (agents/logistics/nodes.py)
+#   - "logistics_extract" : logistics structured extraction, Phase 2 (same file)
+#
+# Phases 1 and 2 are deliberately separate roles so the structured-output
+# pass can use a different model than the tool-calling loop without touching
+# code — see make_extract_plan_node. They point at the same label for now.
 
 LLM_ROLE_CONFIG: dict[str, LLMLabel] = {
-    "classifier": LLMLabel.HAIKU,  # cluster agent — fast sensor pattern recognition
-    "supervisor": LLMLabel.SONNET,  # supervisor — cross-cluster reasoning
+    "classifier": LLMLabel.GPT_MINI,        # fast sensor pattern recognition
+    "logistics": LLMLabel.GPT_MINI,         # ReAct tool-calling loop
+    "logistics_extract": LLMLabel.GPT_MINI,  # transcript → LogisticsAssessment
 }
 
 

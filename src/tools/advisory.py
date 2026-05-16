@@ -20,19 +20,13 @@ or incident management system.
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
-from typing import Literal
-from uuid import UUID, uuid4
 
 from langchain_core.tools import tool
-from pydantic import BaseModel, Field
 
 from agents.commons.schemas import Colors, ResourceAdvisory, ResourceAdvisoryRecord
 from stores.base import AdvisoryRepository
 
 logger = logging.getLogger(__name__)  # One per module
-
-
 
 
 def make_send_advisory(repo: AdvisoryRepository):
@@ -55,12 +49,18 @@ def make_send_advisory(repo: AdvisoryRepository):
             {"status": "ok"} on successful transmission
         """
         try:
-            print(
-                f"\n{Colors.RED}● ADVISORY SENT row={advisory.epicenter_row}, col={advisory.epicenter_column}{Colors.RESET}"
+            logger.warning(
+                "Advisory sent row=%d, col=%d",
+                advisory.epicenter_row,
+                advisory.epicenter_column,
+                extra={"row": advisory.epicenter_row, "col": advisory.epicenter_column},
             )
 
             db_advisory = ResourceAdvisoryRecord(**advisory.model_dump())
 
+            print(
+                f"\n{Colors.RED}● SEND ADVISORY  row={advisory.epicenter_row}, col={advisory.epicenter_column}{Colors.RESET}"
+            )
             repo.save_advisory(db_advisory)
 
             return {"status": "ok"}

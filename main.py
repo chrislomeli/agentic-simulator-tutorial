@@ -30,6 +30,7 @@ import asyncio
 import logging
 
 from agents.commons.agent_dependencies import AgentDependencies
+from agents.logistics.state import LogisticsAssessment
 from agents.supervisor.graph import build_supervisor_graph
 from agents.supervisor.state import SupervisorGraph
 from logging_config import configure_logging
@@ -40,7 +41,7 @@ from world import GenericWorldEngine
 # module-level loggers are captured by structlog from the first record.
 configure_logging(level=logging.INFO)
 
-from llm.llm_registry import LLMLabel, build_llm_registry, models  # noqa: E402
+from llm.llm_registry import LLM_ROLE_CONFIG, build_llm_registry, models  # noqa: E402
 from agents.commons.schemas import CellReadings, CollatedRecordRisk  # noqa: E402
 from config import get_settings  # noqa: E402
 from world.domains.wildfire.sampler import sample_local_conditions  # noqa: E402
@@ -64,15 +65,12 @@ def build_agent_deps(
     settings = get_settings()
     settings.apply_langsmith()
 
-    llm_registry = build_llm_registry(settings, models, {
-        "classifier": LLMLabel.GPT_MINI,
-        "logistics": LLMLabel.GPT_MINI,
-    })
+    llm_registry = build_llm_registry(settings, models, LLM_ROLE_CONFIG)
 
     store = None
 
     prompt_registry = PromptRegistry()
-    prompt_registry.register_models(CellReadings, CollatedRecordRisk)
+    prompt_registry.register_models(CellReadings, CollatedRecordRisk, LogisticsAssessment)
 
     return AgentDependencies(
         prompt_registry=prompt_registry,

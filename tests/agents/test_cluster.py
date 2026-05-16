@@ -79,6 +79,22 @@ class TestEvaluateNode:
             assert 0 <= risk.risk_score <= 10
             assert 0 <= risk.confidence <= 3
 
+    async def test_stub_writes_risk_to_cell(self, agent_deps):
+        """evaluate must write CellRiskAssessment onto the grid cell so
+        sector_analysis can find hotspots."""
+        from agents.commons.schemas import CellRiskAssessment
+        evaluate = make_evaluate_node(
+            prompt_registry=agent_deps.prompt_registry,
+            llm_registry=agent_deps.llm_registry,
+            world_engine=agent_deps.world_engine,
+        )
+        # heuristic_score must be >= HEURISTIC_EVALUATE_THRESHOLD to pass the gate
+        state = _make_state(updated_cells=[{"row": 2, "col": 3, "heuristic_score": 5}])
+        await evaluate(state)
+        cell = agent_deps.world_engine.grid.get_cell(2, 3)
+        assert isinstance(cell.risk_assessment, CellRiskAssessment)
+
+
 
 # ── route_after_evaluate tests ────────────────────────────────────────────────
 
