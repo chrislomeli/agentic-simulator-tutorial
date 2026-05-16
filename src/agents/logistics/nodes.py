@@ -44,6 +44,8 @@ from agents.commons.state_types import StatusValue
 from agents.logistics.state import LogisticsAgentState, LogisticsAssessment
 from llm.llm_registry import LLMRegistry
 from prompts import PromptRegistry
+from stores.base import AdvisoryRepository
+from tools.advisory import dispatch_advisory
 from world import GenericWorldEngine, TerrainType, FireState, Direction, SECTOR_VECTORS, HotspotSectors, trace_sector, \
     analyze_sector
 from world.cell_state import GenericCell
@@ -302,19 +304,6 @@ def route_after_logistics_agent(state: LogisticsAgentState) -> str:
 # ── Node: extract_plan (Phase 2 — structured output) ──────────────────────────
 
 
-def _advisory_was_sent(messages: list[BaseMessage]) -> bool:
-    """True if a send_advisory tool call appears anywhere in the transcript.
-
-    This is the factual signal for whether the agent actuated — read from the
-    conversation itself, not from whatever the model later self-reports.
-    """
-    for m in messages:
-        for call in getattr(m, "tool_calls", None) or []:
-            if call.get("name") == "send_advisory":
-                return True
-    return False
-
-
 def _balance_dangling_tool_calls(messages: list[BaseMessage]) -> list[BaseMessage]:
     """Close any unanswered tool_calls with a synthetic ToolMessage.
 
@@ -338,31 +327,42 @@ def _balance_dangling_tool_calls(messages: list[BaseMessage]) -> list[BaseMessag
     return list(messages) + closers
 
 
-def _assessment_to_plan(assessment: LogisticsAssessment, advisory_sent: bool) -> str:
+def _assessment_to_plan(assessment: LogisticsAssessment) -> str:
     """Render a human-readable plan string for the supervisor (which prints it)."""
-    decision = "ADVISORY SENT" if advisory_sent else "NO ADVISORY SENT"
+    decision = "ADVISORY DISPATCHED" if assessment.advisory is not None else "NO ADVISORY"
     lines = [
         f"Logistics decision: {decision}",
         "",
         "Assessment:",
         assessment.assessment,
         "",
-        f"Reason: {assessment.reason_for_no_advisory}",
+        f"Rationale: {assessment.advisory_rationale}",
     ]
     if assessment.data_gaps:
         lines += ["", "Data gaps:"] + [f"  - {g}" for g in assessment.data_gaps]
+    if assessment.advisory is not None:
+        lines += [
+            "",
+            f"Advisory situation: {assessment.advisory.situation}",
+            f"Urgency level: {assessment.advisory.urgency_level}",
+            f"Recommendation: {assessment.advisory.recommendation}",
+        ]
     return "\n".join(lines)
 
 
-def make_extract_plan_node(prompt_registry: PromptRegistry, llm_registry: LLMRegistry | None):
+def make_extract_plan_node(
+    prompt_registry: PromptRegistry,
+    llm_registry: LLMRegistry | None,
+    advisory_repo: AdvisoryRepository | None = None,
+):
     """Factory: Phase 2 terminal node — structured output over the finished loop.
 
-    Reads the accumulated ReAct transcript and makes a SEPARATE LLM call with
-    ``.with_structured_output(LogisticsAssessment)``. This is the only safe
-    place to combine "the model decided/acted" with "force a structured
-    rationale": the loop already ran with real tools, so structured output can
-    now consume the tool channel without disabling anything. The rationale is
-    faithful because the prior reasoning *is the input* to this call.
+    Reads the accumulated ReAct transcript and makes a separate LLM call with
+    ``.with_structured_output(LogisticsAssessment)``. The agent's job is data
+    gathering and reasoning only; this node owns the dispatch decision.
+
+    If assessment.advisory is not None and advisory_repo is available, the
+    advisory is written to the database here — not by the agent as a tool call.
     """
     structured_llm = None
     if not STUB_LOGISTICS and llm_registry is not None:
@@ -375,11 +375,7 @@ def make_extract_plan_node(prompt_registry: PromptRegistry, llm_registry: LLMReg
     @node_executor("extract_plan")
     def extract_plan(state: LogisticsAgentState) -> dict:
         """Convert the ReAct transcript into a structured LogisticsAssessment."""
-        advisory_sent = _advisory_was_sent(state.messages)
-
         if structured_llm is None:
-            # Defensive: stub mode short-circuits at the router (COMPLETED →
-            # END), so this is only reached if the loop ran without an LLM.
             last_text = next(
                 (
                     m.content
@@ -397,11 +393,14 @@ def make_extract_plan_node(prompt_registry: PromptRegistry, llm_registry: LLMReg
             [SystemMessage(system_prompt), *convo]
         )
 
-        plan_text = _assessment_to_plan(assessment, advisory_sent)
+        if assessment.advisory is not None and advisory_repo is not None:
+            dispatch_advisory(assessment.advisory, advisory_repo)
+
+        plan_text = _assessment_to_plan(assessment)
         print(f"""{Colors.TEAL}{assessment.model_dump_json(indent=2)}{Colors.RESET}""")
         logger.info(
-            "extract_plan: advisory_sent=%s, observations=%d, data_gaps=%d",
-            advisory_sent,
+            "extract_plan: advisory=%s, observations=%d, data_gaps=%d",
+            assessment.advisory is not None,
             len(assessment.observations),
             len(assessment.data_gaps),
         )

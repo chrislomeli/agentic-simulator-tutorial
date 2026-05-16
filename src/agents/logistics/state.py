@@ -57,10 +57,13 @@ class LogisticsAssessment(BaseModel):
         description="Reasoning from observations to conclusion. "
                     "Explain what the data implied and how you weighted it."
     )
-    reason_for_no_advisory: Annotated[str, Field(min_length=10)] = Field(
-        description="Explain why you did or did not send a ResourceAdvisory. Minimum 10 characters."
+    advisory_rationale: Annotated[str, Field(min_length=10)] = Field(
+        description="Explain why a ResourceAdvisory was or was not warranted. Minimum 10 characters."
     )
-    advisory: list[ResourceAdvisory] = Field(default_factory=list, description="Any advisory that was sent")
+    advisory: ResourceAdvisory | None = Field(
+        default=None,
+        description="Populate with a ResourceAdvisory if conditions warrant one; leave null otherwise."
+    )
 
 
 

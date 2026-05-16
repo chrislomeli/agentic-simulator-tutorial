@@ -30,9 +30,10 @@ AgentDependencies (carries the world_engine, DataStore, and LLMRegistry).
 Tools are built only when the required dependency is available:
   - get_wildfire_activity: requires data_store != None
   - get_resources_within : requires data_store != None
-  - send_advisory        : requires data_store != None
 
-Missing dependencies → fewer tools, not a crash.
+The advisory is not a tool. extract_plan produces a LogisticsAssessment via
+structured output; if assessment.advisory is not None, extract_plan dispatches
+it to the DB directly. Missing dependencies → fewer tools, not a crash.
 """
 
 from __future__ import annotations
@@ -50,7 +51,6 @@ from agents.logistics.nodes import (
     route_after_logistics_agent,
 )
 from agents.logistics.state import LogisticsAgentState, LogisticsGraph
-from tools.advisory import make_send_advisory
 from tools.resources import make_get_resources_within
 from tools.wildfires import make_get_wildfire_activity
 
@@ -83,8 +83,9 @@ def build_logistics_agent_graph(*, agent_deps: AgentDependencies) -> LogisticsGr
     builder.add_node("logistics_agent",
                      make_logistics_agent_node(tools, agent_deps.prompt_registry, agent_deps.llm_registry))
     builder.add_node("tools", ToolNode(tools))
+    advisory_repo = agent_deps.data_store.advisories if agent_deps.data_store is not None else None
     builder.add_node("extract_plan",
-                     make_extract_plan_node(agent_deps.prompt_registry, agent_deps.llm_registry))
+                     make_extract_plan_node(agent_deps.prompt_registry, agent_deps.llm_registry, advisory_repo))
 
     builder.add_edge(START, "sector_analysis")
     builder.add_edge("sector_analysis", "logistics_agent")
@@ -106,7 +107,6 @@ def _build_tools(agent_deps: AgentDependencies) -> list:
     if agent_deps.data_store is not None:
         tools.append(make_get_wildfire_activity(agent_deps.data_store.wildfires))
         tools.append(make_get_resources_within(agent_deps.data_store.terrain, agent_deps.data_store.resources))
-        tools.append(make_send_advisory(agent_deps.data_store.advisories))
     else:
         logger.warning("pg_gateway not available — resource and wildfire tools skipped")
 
