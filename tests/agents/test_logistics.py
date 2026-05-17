@@ -59,16 +59,19 @@ class TestBuildLogisticsGraph:
         nodes = set(graph.get_graph().nodes.keys())
         assert "complete" not in nodes
 
-    def test_no_world_engine_skips_sector_analysis(self, agent_deps):
-        """When world_engine is None the graph should still compile without sector_analysis."""
+    def test_no_world_engine_raises(self, agent_deps):
+        """world_engine is mandatory — every consumer dereferences it
+        unguarded (unlike data_store/cell_state_manager, which are
+        optional). Building a logistics graph without one must fail
+        loudly, not silently degrade."""
         from agents.commons.agent_dependencies import AgentDependencies
-        deps = AgentDependencies(
-            llm_registry=agent_deps.llm_registry,
-            prompt_registry=agent_deps.prompt_registry,
-            store=None,
-            world_engine=None,
-        )
         with pytest.raises(Exception):
+            deps = AgentDependencies(
+                llm_registry=agent_deps.llm_registry,
+                prompt_registry=agent_deps.prompt_registry,
+                store=None,
+                world_engine=None,
+            )
             build_logistics_agent_graph(agent_deps=deps)
 
 
