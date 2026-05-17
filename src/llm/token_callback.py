@@ -166,6 +166,18 @@ class TokenUsageCallback(BaseCallbackHandler):
             u = usage["token_usage"]
             return u.get("prompt_tokens", 0), u.get("completion_tokens", 0)
 
+        # Bedrock (ChatBedrockConverse) and modern LangChain attach usage to
+        # the message as ``usage_metadata`` rather than in ``llm_output``.
+        # Fall back to it so token accounting still works under Bedrock.
+        try:
+            for gen_list in response.generations:
+                for gen in gen_list:
+                    meta = getattr(getattr(gen, "message", None), "usage_metadata", None)
+                    if meta:
+                        return meta.get("input_tokens", 0), meta.get("output_tokens", 0)
+        except (AttributeError, TypeError):
+            pass
+
         return 0, 0
 
     def report(self) -> dict:

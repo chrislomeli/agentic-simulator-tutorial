@@ -1,6 +1,5 @@
-"""
-main.py — load the real-world Los Padres scenario and run the streaming
-runtime orchestrator end-to-end.
+"""main.py — local entrypoint: load the real-world Los Padres scenario
+from Postgres and run the streaming runtime orchestrator end-to-end.
 
 Pipeline:
 
@@ -15,9 +14,9 @@ Pipeline:
                           │   └────── CellStateManager (collator)
                           └────────── SensorPublisher (drives engine.tick)
 
-The composition root: wires LLM registry, prompt registry, and the
-supervisor graph (which compiles its child cluster graph internally),
-then hands everything to the RuntimeOrchestrator.
+This file owns only the *local* concerns: Postgres bootstrap, scenario
+load, and the asyncio run loop. Dependency and graph assembly live in
+``runtime.composition`` so other deployment targets reuse them unchanged.
 
 Run from the project root::
 
@@ -29,62 +28,28 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from agents.commons.agent_dependencies import AgentDependencies
-from agents.logistics.state import LogisticsAssessment
-from agents.supervisor.graph import build_supervisor_graph
-from agents.supervisor.state import SupervisorGraph
 from logging_config import configure_logging
-from prompts import PromptRegistry
-from world import GenericWorldEngine
 
 # configure_logging() must come before all project imports so that
 # module-level loggers are captured by structlog from the first record.
 configure_logging(level=logging.INFO)
 
-from llm.llm_registry import LLM_ROLE_CONFIG, build_llm_registry, models  # noqa: E402
-from agents.commons.schemas import CellReadings, CollatedRecordRisk  # noqa: E402
-from config import get_settings  # noqa: E402
+from runtime import RuntimeOrchestrator  # noqa: E402
+from runtime.composition import build_agent_dependencies, build_supervisor  # noqa: E402
+from stores import get_postgres_data_store  # noqa: E402
+from world.cell_state_manager import CellStateManager  # noqa: E402
 from world.domains.wildfire.sampler import sample_local_conditions  # noqa: E402
 from world.domains.wildfire.scenario_loader import load_scenario_from_db  # noqa: E402
-from runtime import RuntimeOrchestrator  # noqa: E402
-from stores import get_postgres_data_store  # noqa: E402
-from stores.base import DataStore  # noqa: E402
-from world.cell_state_manager import CellStateManager  # noqa: E402
 
 # Smoke-test cadence — fast enough that the demo finishes in a few
 # seconds, slow enough that publisher and consumer can interleave.
 SMOKE_TICKS = 1
 SMOKE_TICK_INTERVAL_SEC = 0.05
 
-def build_agent_deps(
-    engine: GenericWorldEngine,
-    cell_state_manager: CellStateManager,
-    data_store: DataStore | None = None,
-) -> AgentDependencies:
-    """Construct the LLM/prompt/store dependencies for graph compilation."""
-    settings = get_settings()
-    settings.apply_langsmith()
-
-    llm_registry = build_llm_registry(settings, models, LLM_ROLE_CONFIG)
-
-    store = None
-
-    prompt_registry = PromptRegistry()
-    prompt_registry.register_models(CellReadings, CollatedRecordRisk, LogisticsAssessment)
-
-    return AgentDependencies(
-        prompt_registry=prompt_registry,
-        llm_registry=llm_registry,
-        world_engine=engine,
-        cell_state_manager=cell_state_manager,
-        store=store,
-        data_store=data_store,
-    )
-
 
 async def run_orchestrator(engine, sensor_inventory, cell_state_manager, agent_deps) -> None:
     """Build the supervisor graph, construct the orchestrator, run it."""
-    supervisor_graph: SupervisorGraph = build_supervisor_graph(agent_dependencies=agent_deps)
+    supervisor_graph = build_supervisor(agent_deps)
 
     orchestrator = RuntimeOrchestrator(
         sensor_inventory=sensor_inventory,
@@ -93,7 +58,7 @@ async def run_orchestrator(engine, sensor_inventory, cell_state_manager, agent_d
         cell_state_manager=cell_state_manager,
         sampler=sample_local_conditions,
         tick_interval_seconds=SMOKE_TICK_INTERVAL_SEC,
-        location_count=1
+        location_count=1,
     )
 
     print()
@@ -124,7 +89,7 @@ def main() -> None:
             sensor_inventory=sensor_inventory,
         )
 
-        agent_dependencies = build_agent_deps(engine, cell_state_manager, data_store=data_store)
+        agent_dependencies = build_agent_dependencies(engine, cell_state_manager, data_store=data_store)
         asyncio.run(run_orchestrator(engine, sensor_inventory, cell_state_manager, agent_dependencies))
     finally:
         data_store.close()

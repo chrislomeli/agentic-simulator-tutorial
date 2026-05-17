@@ -106,6 +106,55 @@ def default_sampler(
     return cell.cell_state.to_local_conditions()
 
 
+# ── Trigger → graph invocation seam ──────────────────────────────────────────
+
+
+@dataclass
+class SupervisorInvocation:
+    """Structured outcome of one supervisor graph invocation.
+
+    Deliberately carries no RuntimeStats / orchestrator state — it is what
+    a single trigger produced, nothing about how the loop accumulates it.
+    """
+
+    cluster_ids: list[str]
+    cluster_score: dict[str, RiskScore]
+    assessments_produced: int
+
+
+async def invoke_supervisor_for_trigger(
+    supervisor_graph: SupervisorGraph,
+    payload: dict[str, list[CellReadings]],
+) -> SupervisorInvocation:
+    """Invoke the supervisor graph for one trigger's worth of clusters.
+
+    Pure with respect to runtime state: it does not touch the publisher,
+    the queue, the asyncio loop, or RuntimeStats. The local loop folds the
+    returned summary into its stats; a stateless entrypoint (e.g. a Bedrock
+    AgentCore handler) can call this directly with a trigger payload and get
+    the same structured outcome. This is the transport/invocation seam — the
+    one place a trigger becomes a graph run.
+    """
+    initial_state = SupervisorState(clusters=payload)
+    result = await supervisor_graph.ainvoke(initial_state)
+
+    scores: dict[str, RiskScore] = result.get("cluster_score") or {}
+    findings: dict = result.get("cluster_findings") or {}
+    total = sum(len(v) for v in findings.values())
+
+    logger.info(
+        "Supervisor graph complete: %d cluster(s), scores=%s, %d assessment(s)",
+        len(payload),
+        scores,
+        total,
+    )
+    return SupervisorInvocation(
+        cluster_ids=list(payload),
+        cluster_score=scores,
+        assessments_produced=total,
+    )
+
+
 # ── Orchestrator ─────────────────────────────────────────────────────────────
 
 
@@ -313,37 +362,24 @@ class RuntimeOrchestrator:
     # ── Internal helpers ────────────────────────────────────────────────────
 
     async def _invoke_supervisor_graph(self, payload: dict[str, list[CellReadings]]) -> None:
-        """
-        Invoke the supervisor graph for one tick's worth of triggered clusters.
+        """Run one tick's clusters through the graph and fold the result
+        into RuntimeStats.
 
-        Builds a SupervisorState with ``clusters`` pre-populated. The
-        supervisor fans out to one cluster agent per cluster via the Send API,
-        then aggregates results into ``cluster_score`` and ``cluster_findings``
-        before the assess/decide/dispatch nodes run.
+        The graph call itself lives in :func:`invoke_supervisor_for_trigger`
+        (the transport-agnostic seam). This adapter only owns the loop's
+        stats accumulation, so the local loop and a stateless entrypoint
+        share identical invocation behaviour.
         """
-        initial_state = SupervisorState(
-            clusters=payload,
-        )
-
-        result = await self._supervisor_graph.ainvoke(initial_state)
+        outcome = await invoke_supervisor_for_trigger(self._supervisor_graph, payload)
 
         self._stats.graph_invocations += 1
-        for cluster_id in payload:
+        for cluster_id in outcome.cluster_ids:
             self._stats.invocations_by_cluster[cluster_id] = (
                 self._stats.invocations_by_cluster.get(cluster_id, 0) + 1
             )
 
-        # Accumulate per-cluster risk scores across ticks (max per cluster).
-        scores: dict[str, RiskScore] = result.get("cluster_score") or {}
-        for cluster_id, score in scores.items():
+        # Accumulate per-cluster risk scores across ticks (latest per cluster).
+        for cluster_id, score in outcome.cluster_score.items():
             self._stats.cluster_score[cluster_id] = score
 
-        findings: dict = result.get("cluster_findings") or {}
-        total = sum(len(v) for v in findings.values())
-        self._stats.risk_assessments_produced += total
-        logger.info(
-            "Supervisor graph complete: %d cluster(s), scores=%s, %d assessment(s)",
-            len(payload),
-            scores,
-            total,
-        )
+        self._stats.risk_assessments_produced += outcome.assessments_produced
