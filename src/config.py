@@ -56,13 +56,6 @@ class Settings(BaseSettings):
     openai_api_key: SecretStr | None = None
     ollama_base_url: str = "http://localhost:11434"
 
-    # ── AWS Bedrock ───────────────────────────────────────────────────────────
-    # Bedrock auth is the standard AWS credential chain (env vars, shared
-    # config/credentials file, or an IAM role) — not a single API key.
-    # region/profile are optional overrides; leave unset to use boto3 defaults.
-    aws_region: str | None = None
-    aws_profile: str | None = None
-
     # ── LangSmith / LangChain tracing ─────────────────────────────────────────
     langchain_api_key: str = ""
     langchain_tracing_v2: bool = False

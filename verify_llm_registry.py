@@ -29,7 +29,7 @@ def check_settings():
 
 def check_registry(settings):
     try:
-        from llm.llm_registry import LLM_ROLE_CONFIG, build_llm_registry, models
+        from config import LLM_ROLE_CONFIG, build_llm_registry, models
         registry = build_llm_registry(settings, models, LLM_ROLE_CONFIG)
     except Exception as e:
         print(f"✗ Failed to build registry: {e}")

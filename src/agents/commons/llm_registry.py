@@ -40,7 +40,6 @@ from typing import Any
 from pydantic import SecretStr
 
 from config import Settings
-from llm.token_callback import TokenUsageCallback
 
 logger = logging.getLogger(__name__)
 
@@ -120,25 +119,12 @@ models: dict[LLMLabel, LLMModel | None] = {
 
 
 # ── Role → model label mapping ────────────────────────────────────────────────
-# Maps agent role → LLMLabel. This is the SINGLE source of truth: the
-# composition root (main.py) builds the registry from this dict. Change a
-# label here to swap the model for that role everywhere.
-#
-# Only roles that are actually consumed via llm_registry.get(<role>) belong
-# here — listing a role nothing requests is just a lie waiting to mislead.
-# Consumers today:
-#   - "classifier"        : cluster agent  (agents/cluster/nodes.py)
-#   - "logistics"         : logistics ReAct loop, Phase 1 (agents/logistics/nodes.py)
-#   - "logistics_extract" : logistics structured extraction, Phase 2 (same file)
-#
-# Phases 1 and 2 are deliberately separate roles so the structured-output
-# pass can use a different model than the tool-calling loop without touching
-# code — see make_extract_plan_node. They point at the same label for now.
+# Maps agent role → LLMLabel.
+# Change a label here to swap the model for that role everywhere.
 
 LLM_ROLE_CONFIG: dict[str, LLMLabel] = {
-    "classifier": LLMLabel.GPT_MINI,        # fast sensor pattern recognition
-    "logistics": LLMLabel.GPT_MINI,         # ReAct tool-calling loop
-    "logistics_extract": LLMLabel.GPT_MINI,  # transcript → LogisticsAssessment
+    "classifier": LLMLabel.HAIKU,  # cluster agent — fast sensor pattern recognition
+    "supervisor": LLMLabel.SONNET,  # supervisor — cross-cluster reasoning
 }
 
 
@@ -161,7 +147,7 @@ class LLMRegistry:
     def __init__(
         self,
         clients: dict[str, Any],
-        callbacks: dict[str, TokenUsageCallback] | None = None,
+        callbacks: dict[str, "TokenUsageCallback"] | None = None,
     ) -> None:
         self._clients = clients
         self._callbacks = callbacks or {}
@@ -184,9 +170,10 @@ class LLMRegistry:
 def _build_chat_model(
     model_cfg: LLMModel,
     ollama_base_url: str,
-    callback: TokenUsageCallback | None = None,
+    callback: "TokenUsageCallback | None" = None,
 ) -> Any:
     """Instantiate a LangChain chat model from a resolved LLMModel."""
+    from agents.commons.token_callback import TokenUsageCallback
 
     api_key = (
         model_cfg.api_key.get_secret_value()
@@ -198,21 +185,15 @@ def _build_chat_model(
     if model_cfg.provider == LLMProvider.OPENAI:
         from langchain_openai import ChatOpenAI
 
-        return ChatOpenAI(
-            model=model_cfg.model, temperature=0, api_key=api_key, callbacks=callbacks
-        )
+        return ChatOpenAI(model=model_cfg.model, temperature=0, api_key=api_key, callbacks=callbacks)
     elif model_cfg.provider == LLMProvider.ANTHROPIC:
         from langchain_anthropic import ChatAnthropic
 
-        return ChatAnthropic(
-            model_name=model_cfg.model, api_key=api_key, temperature=0, callbacks=callbacks
-        )
+        return ChatAnthropic(model_name=model_cfg.model, api_key=api_key, temperature=0, callbacks=callbacks)
     elif model_cfg.provider == LLMProvider.OLLAMA:
         from langchain_ollama import ChatOllama
 
-        return ChatOllama(
-            model=model_cfg.model, temperature=0, base_url=ollama_base_url, callbacks=callbacks
-        )
+        return ChatOllama(model=model_cfg.model, temperature=0, base_url=ollama_base_url, callbacks=callbacks)
     raise ValueError(f"Unknown provider: {model_cfg.provider}")
 
 
@@ -233,6 +214,8 @@ def build_llm_registry(
     STUB roles are skipped — registry.get() will raise KeyError if all
     roles are stubs and there is no fallback.
     """
+    from agents.commons.token_callback import TokenUsageCallback
+
     clients: dict[str, Any] = {}
     callbacks: dict[str, TokenUsageCallback] = {}
 

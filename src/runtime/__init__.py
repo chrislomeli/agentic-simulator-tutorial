@@ -18,16 +18,6 @@ graphs unaware of timing, queues, and lifecycle.
 
 from __future__ import annotations
 
-from runtime.orchestrator import (
-    RuntimeOrchestrator,
-    RuntimeStats,
-    SupervisorInvocation,
-    invoke_supervisor_for_trigger,
-)
+from runtime.orchestrator import RuntimeOrchestrator, RuntimeStats
 
-__all__ = [
-    "RuntimeOrchestrator",
-    "RuntimeStats",
-    "SupervisorInvocation",
-    "invoke_supervisor_for_trigger",
-]
+__all__ = ["RuntimeOrchestrator", "RuntimeStats"]

@@ -108,10 +108,9 @@ class TokenUsageCallback(BaseCallbackHandler):
         tool_name = serialized.get("name", "unknown")
         self._tool_start_times[run_id] = perf_counter()
         logger.info(
-            "TOOL:: [%s] tool_start  name=%s run_id=%s args=%s ",
+            "[%s] tool_start  name=%s  args=%s",
             self.role,
             tool_name,
-            run_id,
             _truncate(input_str),
         )
 
@@ -189,7 +188,6 @@ class TokenUsageCallback(BaseCallbackHandler):
 # ── Module-level helper ───────────────────────────────────────────────────────
 
 _TRUNCATE_AT = 200
-
 
 def _truncate(value: Any, max_len: int = _TRUNCATE_AT) -> str:
     """Render value as a string, truncated so logs stay readable."""
