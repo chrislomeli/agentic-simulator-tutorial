@@ -48,6 +48,25 @@ logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
+    # ── Deployment backbone ────────────────────────────────────────────────────
+    # The single lever. ``runtime.profiles`` maps this to the per-seam
+    # adapters (store, queue, graph-client). Values mirror the columns in
+    # temp.csv: local | docker-compose | k8s-desktop | k8s-deployed | aws.
+    # Everything else here is the wiring detail a given profile reads.
+    deployment_profile: str = "local"
+
+    # Store backend. RDS vs local Postgres is just a different
+    # ``postgres_url`` — same adapter. "mock" swaps in the JSON-backed
+    # DataStore (no DB needed; demos/tests).
+    store_backend: str = "postgres"
+
+    # Networked-seam endpoints — only read by the non-local profiles.
+    # Left None for local/collapsed runs; the broker/HTTP/AgentCore
+    # adapters are stubs until the broker + API steps.
+    event_broker_url: str | None = None
+    graph_service_url: str | None = None
+    agent_runtime_arn: str | None = None
+
     # ── Database ───────────────────────────────────────────────────────────────
     postgres_url: str = "postgresql://localhost:5432/wildfire"
 

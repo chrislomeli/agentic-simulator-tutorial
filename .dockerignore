@@ -1,0 +1,24 @@
+# Keep the build context lean and the image clean.
+.git
+.venv
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.ruff_cache
+dist
+build
+*.egg-info
+docs
+tests
+scripts/raw
+scripts/data_wrangling
+.idea
+.vscode
+temp.csv
+temp.py
+*.md
+!README.md
+deploy
+Dockerfile
+docker-compose.yml
+.dockerignore

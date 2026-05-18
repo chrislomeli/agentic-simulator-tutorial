@@ -1,0 +1,21 @@
+# k8s-desktop: local cluster (kind / k3d / Docker Desktop / minikube).
+# Profile = k8s-desktop; Postgres runs in-cluster (point POSTGRES_URL at
+# your in-cluster service or a port-forwarded compose DB). Image is the
+# locally built tag loaded into the cluster.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: wildfire
+resources:
+  - ../../base
+images:
+  - name: wildfire
+    newName: wildfire
+    newTag: latest
+patches:
+  - target:
+      kind: ConfigMap
+      name: wildfire-config
+    patch: |
+      - op: replace
+        path: /data/DEPLOYMENT_PROFILE
+        value: "k8s-desktop"

@@ -82,18 +82,33 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["agents", "bridge", "config", "domains", "resources", "runtime", "sensors", "tools", "transport", "world"]
+known-first-party = ["agents", "config", "exceptions", "llm", "logging_config", "prompts", "runtime", "stores", "tools", "world"]
 
+# Per-role runtime entry points — one container = one process = one of
+# these. Equivalent to `python -m runtime.entrypoints.<role>`.
 [project.scripts]
-build-fuel-grid = "domains.wildfire.world_builder.cli.build_fuel_grid:main"
-build-scenario = "domains.wildfire.world_builder.cli.build_scenario:main"
-fetch-raws-stations = "domains.wildfire.world_builder.cli.fetch_raws_stations:main"
+wildfire-local = "runtime.entrypoints.local:main"
+wildfire-producer = "runtime.entrypoints.producer:main"
+wildfire-consumer = "runtime.entrypoints.consumer:main"
+
+# NOTE: the world-builder data-wrangling CLIs live under scripts/ (not on the
+# package path) and are dev tooling, not runtime — so they are intentionally
+# NOT exposed here. They are run directly (`uv run python scripts/...`).
 
 [project.urls]
 Homepage = "https://github.com/chrislomeli/world-simulator"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/sensors", "src/tools", "src/domains", "src/transport", "src/bridge", "src/world", "src/agents", "src/resources", "src/runtime"]
+# Idiomatic src-layout: `sources = ["src"]` strips the leading "src/" for
+# the built wheel, so everything under src/ — the packages AND the loose
+# top-level modules (config.py, exceptions.py, logging_config.py) —
+# imports as top-level. One rule, no per-module force-include.
+#
+# Crucially this also makes the *editable* install a redirect to src/
+# (no physical copies in site-packages), so editing src/ is live and
+# nothing can shadow it. `only-include` keeps the wheel to src/ contents.
+only-include = ["src"]
+sources = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

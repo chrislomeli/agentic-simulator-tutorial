@@ -1,0 +1,85 @@
+# docker-compose — the "everything containerised, one host" target.
+#
+# What runs today (the honest cut):
+#   db   — Postgres + PostGIS + pgvector
+#   app  — the collapsed runtime (DEPLOYMENT_PROFILE=local): producer +
+#          queue + consumer + in-process graph, one container. Runnable
+#          end-to-end once the DB is seeded.
+#
+# The split topology (separate producer / consumer / graph containers
+# talking over a broker + HTTP) is sketched, commented, at the bottom. It
+# goes live when the broker adapter and the FastAPI graph service land —
+# no app code changes then, only the profile/env and these service defs.
+#
+# DB-less demo: set DEPLOYMENT_PROFILE=local + STORE_BACKEND=mock on `app`
+# and you can drop the `db` service entirely.
+
+services:
+  db:
+    build:
+      context: ./deploy
+      dockerfile: postgres.Dockerfile
+    environment:
+      POSTGRES_USER: wildfire
+      POSTGRES_PASSWORD: wildfire
+      POSTGRES_DB: wildfire
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./deploy/postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wildfire -d wildfire"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build:
+      context: .
+    command: ["wildfire-local"]
+    environment:
+      DEPLOYMENT_PROFILE: local
+      STORE_BACKEND: postgres
+      POSTGRES_URL: postgresql://wildfire:wildfire@db:5432/wildfire
+      # Provide your LLM key via a .env file or the shell environment.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+
+# ── Future split topology (uncomment when broker + API land) ──────────
+#
+#  broker:                     # Kafka / Redis Streams — the EventQueue
+#    image: redis:7            # adapter target for the non-local profiles
+#    ports: ["6379:6379"]
+#
+#  producer:
+#    build: { context: . }
+#    command: ["wildfire-producer"]
+#    environment:
+#      DEPLOYMENT_PROFILE: docker-compose
+#      EVENT_BROKER_URL: redis://broker:6379
+#      POSTGRES_URL: postgresql://wildfire:wildfire@db:5432/wildfire
+#    depends_on: [broker, db]
+#
+#  consumer:
+#    build: { context: . }
+#    command: ["wildfire-consumer"]
+#    environment:
+#      DEPLOYMENT_PROFILE: docker-compose
+#      EVENT_BROKER_URL: redis://broker:6379
+#      GRAPH_SERVICE_URL: http://graph:8000   # the FastAPI graph (API step)
+#    depends_on: [broker]
+#
+#  graph:                       # the FastAPI graph service — built in the
+#    build: { context: . }      # API step; answers HttpGraphClient calls
+#    command: ["uvicorn", "..."]
+#    environment:
+#      DEPLOYMENT_PROFILE: docker-compose
+#      POSTGRES_URL: postgresql://wildfire:wildfire@db:5432/wildfire
+#    depends_on: [db]

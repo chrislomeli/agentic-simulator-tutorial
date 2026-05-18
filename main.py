@@ -2,17 +2,19 @@
 
 Demonstrates the deployment-agnostic path:
 
-    list of changed cells ──► GraphClient.invoke ──► GraphFacade
-                                                       │ reads the world map
-                                                       ▼
-                                       supervisor graph (world injected)
+    batch of sensor events ──► GraphClient.invoke ──► GraphFacade
+                                                        │ folds events onto
+                                                        │ the immutable seed
+                                                        ▼
+                                        supervisor graph (world injected)
 
-The CQRS write side (sensors → world update) is *simulated* briefly here
-to produce realistic world state plus the list of changed cells; in a
-real deployment that is the upstream consumer's job, on its own
-deployable. This file then exercises the actual entry point: build a
-TriggerRequest from those cells, call it through the in-process
-GraphClient adapter, print the TriggerResult.
+The producer (sensors → events) is *simulated* briefly here to generate
+one tick of realistic events; in a real deployment that is the upstream
+producer's job, on its own deployable. This file then exercises the
+actual entry point: build a TriggerRequest carrying those events, call
+it through the in-process GraphClient adapter, print the TriggerResult.
+The facade — not this file — folds the events onto its seed-hydrated
+world, so the DB seed stays immutable and the scenario replays.
 
 The streaming RuntimeOrchestrator still exists in ``runtime/`` but is no
 longer the entry path — the facade/port is.
@@ -34,28 +36,24 @@ from logging_config import configure_logging
 # module-level loggers are captured by structlog from the first record.
 configure_logging(level=logging.INFO)
 
-from agents.commons.schemas import GridPosition  # noqa: E402
-from runtime.composition import build_agent_dependencies, build_supervisor  # noqa: E402
-from runtime.contract import TriggerRequest  # noqa: E402
-from runtime.facade import GraphFacade  # noqa: E402
-from runtime.graph_client import GraphClient, InProcessGraphClient  # noqa: E402
-from stores import get_postgres_data_store  # noqa: E402
-from world.cell_state_manager import CellStateManager  # noqa: E402
+from config import get_settings  # noqa: E402
+from runtime.contract import GraphClient, TriggerRequest  # noqa: E402
+from runtime.profiles import build_runtime  # noqa: E402
 from world.domains.wildfire.sampler import sample_local_conditions  # noqa: E402
-from world.domains.wildfire.scenario_loader import load_scenario_from_db  # noqa: E402
+from world.transport import SensorEvent  # noqa: E402
 
 
-def simulate_write_side(engine, sensor_inventory, cell_state_manager) -> list[GridPosition]:
-    """Stand in for the upstream CQRS consumer.
+def simulate_write_side(engine, sensor_inventory) -> list[SensorEvent]:
+    """Stand in for the upstream producer.
 
-    Advances the world one tick, feeds each sensor's reading into the
-    world (CellStateManager), and returns the cells that changed. In a
-    real deployment this is a separate consumer that commits the world
-    update *before* the trigger is sent; here it just produces realistic
-    state plus the trigger the entry point will consume.
+    Advances the world one tick and emits each sensor's reading as a
+    SensorEvent. It does NOT fold them into world state — that is the
+    graph side's job (the facade folds onto its immutable seed). In a
+    real deployment this is a separate producer on its own deployable;
+    here it just generates one tick of realistic events for the trigger.
     """
     engine.tick()
-    changed: set[tuple[int, int]] = set()
+    events: list[SensorEvent] = []
     for sensor in sensor_inventory.all_sensors():
         if sensor.grid_row is None or sensor.grid_col is None:
             continue
@@ -63,18 +61,17 @@ def simulate_write_side(engine, sensor_inventory, cell_state_manager) -> list[Gr
         event = sensor.emit(conditions)
         if event is None:
             continue
-        for _cluster_id, row, col in cell_state_manager.update(event):
-            changed.add((row, col))
-    return [GridPosition(row=r, col=c) for r, c in sorted(changed)]
+        events.append(event)
+    return events
 
 
-async def run_entrypoint(client: GraphClient, cells: list[GridPosition]) -> None:
-    """The actual entry point: a trigger (list of cells) → the graph."""
-    request = TriggerRequest(correlation_id=str(uuid.uuid4()), cells=cells)
+async def run_entrypoint(client: GraphClient, events: list[SensorEvent]) -> None:
+    """The actual entry point: a trigger (batch of events) → the graph."""
+    request = TriggerRequest(correlation_id=str(uuid.uuid4()), events=events)
 
     print()
     print(f"=== Invoking graph for trigger {request.correlation_id} ===")
-    print(f"  changed cells: {len(cells)}")
+    print(f"  sensor events: {len(events)}")
     result = await client.invoke(request)
 
     print()
@@ -89,32 +86,25 @@ async def run_entrypoint(client: GraphClient, cells: list[GridPosition]) -> None
 
 
 def main() -> None:
-    data_store = get_postgres_data_store()
+    # One lever. ``build_runtime`` reads ``deployment_profile`` and binds
+    # the store/queue/graph-client adapters for that target. main.py owns
+    # no wiring — only the (simulated) upstream write side and the entry
+    # point, both deployment-agnostic.
+    settings = get_settings()
+    bundle = build_runtime(settings)
+    print(f"=== deployment profile: {bundle.profile.value} ===")
+
+    client: GraphClient = bundle.graph_client
     try:
-        engine, sensor_inventory = load_scenario_from_db("lpnf-south", data_store)
-        cell_state_manager = CellStateManager(
-            world_grid=engine.grid,
-            sensor_inventory=sensor_inventory,
-        )
-        agent_deps = build_agent_dependencies(engine, cell_state_manager, data_store=data_store)
-        supervisor_graph = build_supervisor(agent_deps)
-
-        # Built once (startup phase): the directly-callable service and
-        # the in-process binding of the outbound port.
-        facade = GraphFacade(
-            supervisor_graph=supervisor_graph,
-            cell_state_manager=cell_state_manager,
-        )
-        client: GraphClient = InProcessGraphClient(facade)
-
-        # Upstream write side (simulated): commit world state, get the
-        # changed cells. In production this is a separate deployable.
-        changed_cells = simulate_write_side(engine, sensor_inventory, cell_state_manager)
+        # Upstream producer (simulated): one tick of sensor events. In
+        # production this is a separate deployable; it does not fold
+        # state — the facade behind the port does, onto the seed.
+        events = simulate_write_side(bundle.engine, bundle.sensor_inventory)
 
         # The real entry point: trigger → graph, via the port.
-        asyncio.run(run_entrypoint(client, changed_cells))
+        asyncio.run(run_entrypoint(client, events))
     finally:
-        data_store.close()
+        bundle.close()
 
 
 if __name__ == "__main__":
