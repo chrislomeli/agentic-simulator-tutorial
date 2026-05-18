@@ -53,6 +53,7 @@ class LLMProvider(Enum):
     OPENAI = "OPENAI"
     ANTHROPIC = "ANTHROPIC"
     OLLAMA = "OLLAMA"
+    BEDROCK = "BEDROCK"
 
 
 class LLMLabel(Enum):
@@ -62,6 +63,8 @@ class LLMLabel(Enum):
     GPT_MINI = "gpt-mini"
     GPT = "gpt"
     OLLAMA_LLAMA3 = "ollama-llama3"
+    BEDROCK_SONNET = "bedrock-sonnet"
+    BEDROCK_HAIKU = "bedrock-haiku"
     STUB = "STUB"
 
 
@@ -71,8 +74,12 @@ class LLMLabel(Enum):
 @dataclasses.dataclass
 class LLMModel:
     model: str
-    key_label: str
     provider: LLMProvider
+    # Settings attribute holding the API key. Only meaningful for
+    # single-key providers (OpenAI/Anthropic). None for Ollama (endpoint)
+    # and Bedrock (AWS credential chain). All catalog entries below use
+    # keyword args, so field order is free to change.
+    key_label: str | None = None
     api_key: SecretStr | None = None
 
 
@@ -113,6 +120,19 @@ models: dict[LLMLabel, LLMModel | None] = {
         key_label="ollama_base_url",
         provider=LLMProvider.OLLAMA,
         model="llama3.2:latest",
+    ),
+    # AWS Bedrock — Claude via the Converse API. No key_label: auth is the
+    # AWS credential chain (see Settings.aws_region / aws_profile).
+    # NOTE: depending on region/account these may need an inference-profile
+    # ID/ARN (e.g. "us.anthropic.claude-3-5-sonnet-...") rather than the
+    # bare on-demand model ID below.
+    LLMLabel.BEDROCK_SONNET: LLMModel(
+        provider=LLMProvider.BEDROCK,
+        model="anthropic.claude-3-5-sonnet-20240620-v1:0",
+    ),
+    LLMLabel.BEDROCK_HAIKU: LLMModel(
+        provider=LLMProvider.BEDROCK,
+        model="anthropic.claude-3-5-haiku-20241022-v1:0",
     ),
     # Stub — no LLM
     LLMLabel.STUB: None,
@@ -181,37 +201,84 @@ class LLMRegistry:
         return [cb.report() for cb in self._callbacks.values()]
 
 
+def _resolve_provider_kwargs(model_cfg: LLMModel, settings: Settings) -> dict[str, Any]:
+    """Resolve provider-specific construction kwargs from Settings.
+
+    This is the credential seam. It is the only place that knows how a
+    provider authenticates, so the role-based registry and every node
+    above it stay provider-agnostic:
+
+      - OpenAI / Anthropic : a single API key from a Settings attribute.
+      - Ollama             : a base URL (no credential).
+      - Bedrock            : the AWS credential chain — region/profile are
+                             optional overrides; omitting them lets boto3
+                             fall back to env / shared config / IAM role.
+
+    Returns kwargs ready to splat into the LangChain chat-model ctor.
+    """
+    provider = model_cfg.provider
+
+    if provider in (LLMProvider.OPENAI, LLMProvider.ANTHROPIC):
+        raw = getattr(settings, model_cfg.key_label, None) if model_cfg.key_label else None
+        api_key = raw.get_secret_value() if isinstance(raw, SecretStr) else raw
+        return {"api_key": api_key or None}
+
+    if provider == LLMProvider.OLLAMA:
+        return {"base_url": settings.ollama_base_url}
+
+    if provider == LLMProvider.BEDROCK:
+        kwargs: dict[str, Any] = {}
+        if settings.aws_region:
+            kwargs["region_name"] = settings.aws_region
+        if settings.aws_profile:
+            kwargs["credentials_profile_name"] = settings.aws_profile
+        return kwargs
+
+    raise ValueError(f"Unknown provider: {provider}")
+
+
 def _build_chat_model(
     model_cfg: LLMModel,
-    ollama_base_url: str,
+    provider_kwargs: dict[str, Any],
     callback: TokenUsageCallback | None = None,
 ) -> Any:
-    """Instantiate a LangChain chat model from a resolved LLMModel."""
+    """Instantiate a LangChain chat model from a resolved LLMModel.
 
-    api_key = (
-        model_cfg.api_key.get_secret_value()
-        if isinstance(model_cfg.api_key, SecretStr)
-        else model_cfg.api_key
-    )
+    ``provider_kwargs`` comes from :func:`_resolve_provider_kwargs` — this
+    function only knows which LangChain class maps to which provider, not
+    how that provider authenticates.
+    """
     callbacks = [callback] if callback is not None else []
 
     if model_cfg.provider == LLMProvider.OPENAI:
         from langchain_openai import ChatOpenAI
 
         return ChatOpenAI(
-            model=model_cfg.model, temperature=0, api_key=api_key, callbacks=callbacks
+            model=model_cfg.model, temperature=0, callbacks=callbacks, **provider_kwargs
         )
     elif model_cfg.provider == LLMProvider.ANTHROPIC:
         from langchain_anthropic import ChatAnthropic
 
         return ChatAnthropic(
-            model_name=model_cfg.model, api_key=api_key, temperature=0, callbacks=callbacks
+            model_name=model_cfg.model, temperature=0, callbacks=callbacks, **provider_kwargs
         )
     elif model_cfg.provider == LLMProvider.OLLAMA:
         from langchain_ollama import ChatOllama
 
         return ChatOllama(
-            model=model_cfg.model, temperature=0, base_url=ollama_base_url, callbacks=callbacks
+            model=model_cfg.model, temperature=0, callbacks=callbacks, **provider_kwargs
+        )
+    elif model_cfg.provider == LLMProvider.BEDROCK:
+        try:
+            from langchain_aws import ChatBedrockConverse
+        except ImportError as exc:  # pragma: no cover - exercised only when Bedrock is selected
+            raise RuntimeError(
+                "Bedrock provider selected but 'langchain-aws' is not installed. "
+                "Add langchain-aws to enable Bedrock — no other code change is needed."
+            ) from exc
+
+        return ChatBedrockConverse(
+            model=model_cfg.model, temperature=0, callbacks=callbacks, **provider_kwargs
         )
     raise ValueError(f"Unknown provider: {model_cfg.provider}")
 
@@ -242,19 +309,16 @@ def build_llm_registry(
             logger.info("Skipping role %r — STUB label", role)
             continue
 
-        resolved = dataclasses.replace(model_cfg)
-        raw = getattr(settings, resolved.key_label, None)
-        resolved.api_key = raw if raw else None
-
+        provider_kwargs = _resolve_provider_kwargs(model_cfg, settings)
         callback = TokenUsageCallback(role)
-        chat_model = _build_chat_model(resolved, settings.ollama_base_url, callback)
+        chat_model = _build_chat_model(model_cfg, provider_kwargs, callback)
         clients[role] = chat_model
         callbacks[role] = callback
         logger.info(
             "Registered LLM for role %r → %s (%s)",
             role,
-            resolved.model,
-            resolved.provider.value,
+            model_cfg.model,
+            model_cfg.provider.value,
         )
 
     return LLMRegistry(clients, callbacks)

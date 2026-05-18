@@ -1,28 +1,61 @@
-# Wildfire Agentic Advisor — Tutorial
+# Wildfire Agentic Advisor — Step 09: Advisory Dispatch (Complete Pipeline)
 
-A step-by-step tutorial for building a production-grade multi-agent AI application using [LangGraph](https://github.com/langchain-ai/langgraph). Each numbered directory is a self-contained, runnable checkpoint. Start at `step_01` and work forward, or jump directly to any step to see the system at that stage of development.
+> **Step 9 of 9** — The full end-to-end system. When conditions warrant, a `ResourceAdvisory` is written to the store.
+
+## This Step
+
+Step 09 closes the loop. The `dispatch_advisory` function is called from `extract_plan` when the logistics agent's assessment includes a `ResourceAdvisory`. The advisory is written to the advisory store (PostgreSQL or mock) and logged to the console. The logistics prompts are also refined in this step based on observed LLM behaviour from step 08.
+
+This is the reference implementation. All agent logic is live, all tools are real, and the full pipeline runs without stubs.
+
+### What was added
+
+| Module | Purpose |
+|--------|---------|
+| `src/tools/advisory.py` | `dispatch_advisory(advisory, repo)` — writes a `ResourceAdvisory` to the advisory store as a `ResourceAdvisoryRecord`; logs the dispatch event |
+| `src/agents/logistics/nodes.py` | `extract_plan` updated — calls `dispatch_advisory` when `logistics_assessment.advisory` is not `None` |
+| `src/agents/logistics/graph.py` | `AdvisoryRepository` threaded into `extract_plan` via `AgentDependencies` |
+| `src/agents/logistics/state.py` | Minor field updates for the advisory dispatch flow |
+| `src/prompts/templates/logistics/v1/prompt.j2` | Prompt refinements — clearer instructions for when to populate `advisory` vs. leave it `None` |
+| `src/prompts/templates/logistics_extract/v1/prompt.j2` | Extraction prompt tightened — `advisory_rationale` required even when no advisory is issued |
+
+### What you can run
+
+```bash
+uv run python verify_api_key.py
+uv run python verify_llm_registry.py
+uv run python main.py              # complete pipeline — advisories written when warranted
+uv run python -m pytest tests/ -v
+```
+
+When the logistics agent determines that conditions warrant a response, you will see:
+
+```
+● ADVISORY DISPATCHED  row=4, col=7
+```
+
+The `ResourceAdvisory` is persisted to the advisory store and visible via `stores/cli.py` or directly in PostgreSQL if you have it configured.
+
+### Advisory urgency levels
+
+The `ResourceAdvisory.urgency_level` field uses a standard emergency management scale:
+
+| Level | Name | Meaning |
+|-------|------|---------|
+| 4 | Fade Out | Lowest readiness — routine monitoring |
+| 3 | Double Take | Elevated readiness — increased monitoring |
+| 2 | Fast Pace | High readiness — prepare for deployment |
+| 1 | Cocked Pistol | Maximum readiness — imminent response required |
+
+### Key design points
+
+- **Agent decides; function dispatches** — the LLM decides whether a `ResourceAdvisory` is warranted by populating or leaving null the `advisory` field on `LogisticsAssessment`. The graph code calls `dispatch_advisory` if and only if that field is set. The dispatch function itself is not a tool the LLM calls — it is called deterministically by the `extract_plan` node after the structured output step. This keeps the LLM out of the write path.
+- **Idempotent records** — each advisory is assigned a `uuid` on creation. Re-running the pipeline with the same scenario will produce new advisory records rather than updating existing ones. The `status` field (`SENT` / `SUPPRESSED` / `ACKNOWLEDGED`) is intended for downstream acknowledgement workflows.
+- **Prompt refinement process** — the prompt changes in this step exist because the step 08 prompts produced `advisory=None` too aggressively (the model was uncertain about populating a structured field). The refined prompts include explicit examples of when to populate `advisory` and a required `advisory_rationale` that forces the model to reason about the decision even when it chooses not to dispatch.
 
 ---
 
-## What We Are Building
-
-The application is a wildfire early-warning and resource advisory system. A physics-based world simulator continuously generates sensor telemetry across a geo-gridded terrain. An agentic pipeline consumes that telemetry, assesses fire risk using parallel LLM agents, evaluates nearby suppression resources, and issues a structured advisory when conditions warrant a response.
-
-The wildfire domain is the vehicle — the engineering patterns are the point. After completing all nine steps you will have implemented from scratch:
-
-- A **supervisor / worker** multi-agent hierarchy with a LangGraph `StateGraph` at each level
-- **Parallel subgraph fan-out** using LangGraph's Send API with custom state reducers as the synchronisation barrier
-- A **ReAct tool-calling loop** with domain-specific tools and structured output extraction
-- A **node decorator** providing cross-cutting metrics, exception capture, and distributed tracing for every graph node
-- A **versioned Jinja2 prompt registry** fully decoupled from agent code
-- A **role-based LLM registry** for routing different roles to different providers and models
-- A **dual-backend data store** (PostgreSQL with PostGIS + in-memory mock) behind a shared interface
-
----
-
-## System Architecture
-
-### Runtime Data Flow
+## Full System Overview
 
 ```mermaid
 flowchart TD
@@ -30,8 +63,8 @@ flowchart TD
         WE["GenericWorldEngine\nRothermel fire physics · tick loop"]
         SI["SensorInventory\ntemperature · humidity\nwind speed · wind direction"]
         SP["SensorPublisher\nnoisy readings with failure modes"]
-        WE -->|"engine.tick()"| SP
-        SI -->|provides sensors| SP
+        WE --> SP
+        SI --> SP
     end
 
     SP -->|SensorEvent| Q["AsyncIO Queue\nSensorEventQueue"]
@@ -41,7 +74,7 @@ flowchart TD
         Q --> CM
     end
 
-    CM -->|"triggered clusters\ncluster_id + CellReadings"| SV
+    CM -->|"triggered clusters"| SV
 
     subgraph MAIN["Supervisor Graph (step_02)"]
         SV["fan_out_to_clusters\nreturns list[Send]"]
@@ -50,49 +83,46 @@ flowchart TD
         SV --> AS --> DC
     end
 
-    subgraph CLUSTER["Cluster (Risk) Agents — run in parallel (step_03)"]
-        CA1["Cluster Agent A\nupdate_world → evaluate → report_risk"]
-        CA2["Cluster Agent B"]
-        CAN["Cluster Agent N"]
+    subgraph CLUSTER["Cluster Agents — parallel (step_03 + step_07)"]
+        UW["update_world"]
+        EV["evaluate\nLLM structured output\nCollatedRecordRisk per cell"]
+        RR["report_risk"]
+        UW --> EV --> RR
     end
 
-    SV -->|"Send(cluster_id, readings)"| CA1 & CA2 & CAN
-    CA1 & CA2 & CAN -->|"risk scores + CollatedRecordRisk\nmerged by custom reducers"| AS
+    SV -->|"Send(cluster_id, readings)"| UW
+    RR -->|"risk scores + findings"| AS
+    AS --> SA
 
-    AS --> LA
-
-    subgraph LOGISTICS["Logistics Agent — ReAct loop (step_04)"]
+    subgraph LOGISTICS["Logistics Agent — ReAct loop (step_04 + step_08)"]
+        SA["sector_analysis"]
         LA["logistics_agent\nLLM with tools bound"]
         TN["ToolNode\nsector_heatmap · nearby_resources\nfire_behavior_query"]
-        EP["extract_plan\nstructured output → LogisticsAssessment"]
-        LA <-->|tool calls| TN
+        EP["extract_plan\nLogisticsAssessment structured output\ndispatch_advisory if advisory set ← step_09"]
+        SA --> LA
+        LA <-->|"tool calls"| TN
         LA --> EP
     end
 
-    EP -->|"ResourceAdvisory\nif urgency warrants"| ADV["Advisory Store\nPostgreSQL · mock"]
+    EP -->|"ResourceAdvisory\nwhen warranted"| ADV["Advisory Store\nPostgreSQL · mock"]
+    EP --> DC
 ```
 
 ### Data Model
-
-The world state and agent outputs are persisted through a store layer with both a PostgreSQL (PostGIS) implementation and an in-memory mock for testing.
 
 ```mermaid
 erDiagram
     TERRAIN {
         int     grid_row          PK
         int     grid_column       PK
-        string  cell_key
         string  terrain
-        float   vegetation
         float   fuel_moisture
         float   slope
-        int     cell_size_ft
         float   temperature_c
         float   humidity_pct
         float   wind_speed_mps
         float   wind_direction_deg
         geo     location          "PostGIS geography(Point,4326)"
-        string  region
     }
     SENSORS {
         string  sensor_id         PK
@@ -101,38 +131,26 @@ erDiagram
         string  sensor_type
         string  cluster_id
         float   noise_std
-        float   lat
-        float   long
         geo     location          "PostGIS geography(Point,4326)"
     }
     RESOURCES {
         int     resource_id       PK
         string  agency
-        string  unit_id
-        string  resource_category
         string  resource_type
         string  nwcg_type
         int     capacity_water_gal
         int     pump_gpm
         int     personnel
         string  station_name
-        string  station_address
-        float   lat
-        float   long
         geo     location          "PostGIS geography(Point,4326)"
     }
     WILDFIRE_ACTIVITY {
         date    imsr_date
         string  fire_name
-        string  unit
         int     fire_size_acres
         int     percent_containment
         int     personnel
-        int     crews
         int     engines
-        int     helicopters
-        string  gacc
-        int     fire_priority
     }
     ADVISORIES {
         uuid     id               PK
@@ -140,7 +158,6 @@ erDiagram
         string   status           "SENT · SUPPRESSED · ACKNOWLEDGED"
         int      epicenter_row
         int      epicenter_column
-        string   location_description
         string   situation
         int      urgency_level    "1=Cocked Pistol … 4=Fade Out"
         string   notes
@@ -149,37 +166,16 @@ erDiagram
     TERRAIN ||--o{ SENSORS : "sensor placed at grid cell"
 ```
 
----
-
 ## Step Progression
 
-Each directory is a standalone runnable project. The table shows exactly what each step adds over the previous one.
-
-| branch   | Directory | What it adds                                                                                                                                                                                    |
-|----------|-----------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| step_01  | `setup` | **World engine** — Rothermel fire physics, terrain grid, wildfire domain cell states, sensor inventory, `SensorPublisher`, `SensorEventQueue`, PostgreSQL + mock store backends                 |
-| step_02  | `master graph` | **Supervisor graph + orchestrator skeleton** — `RuntimeOrchestrator` wires publisher → queue → `CellStateManager` → supervisor; all graph nodes are passthrough stubs                           |
-| step_03  | `evaualor graph` | **Cluster (risk) agent skeleton** — `ClusterAgentState`, `update_world → evaluate → report_risk` subgraph; supervisor fans out via Send API; `evaluate` returns deterministic stub scores       |
-| step_04  | `logistics graph` | **Logistics agent skeleton** — `LogisticsAgentState`, `logistics_agent → tools → extract_plan` subgraph wired into the supervisor after `assess_situation`                                      |
-| step_05  | `basic observers` | **`@node_executor` decorator** — wraps all node functions with per-node timing, structured exception capture, and `session_id` tracing; `TracedState` base class added                          |
-| step_06  | `prompt registry` | **Jinja2 prompt registry** — `PromptRegistry` loads versioned templates from `prompts/templates/<name>/<version>/prompt.j2`; all agent nodes switch to rendered prompts                         |
-| step_07  | `llm registry and evaluator` | **LLM registry + cluster agent live** — `LLMRegistry` routes roles to providers (STUB / OpenAI / Anthropic / Ollama); cluster agent `evaluate` node makes real structured-output LLM calls      |
-| step_08  | `logistic ReAct llm and tools` | **Logistics tools + logistics agent live** — `sector_heatmap`, `nearby_resources`, `fire_behavior_query` tools implemented; logistics ReAct loop makes real LLM calls; prompt templates added   |
-| step_09  | `refactor fire advisories` | **Advisory dispatch completed** — `dispatch_advisory` writes `ResourceAdvisory` to the advisory store; logistics prompts refined; full end-to-end pipeline operational                          |
-
----
-
-## Prerequisites
-
-- Python 3.11+
-- [`uv`](https://github.com/astral-sh/uv) for environment management
-- An API key for your chosen LLM provider (steps 07–09 only; steps 01–06 run without one)
-- PostgreSQL with PostGIS (optional — every step includes an in-memory mock backend)
-
-```bash
-cd agentic-simulator-step_01   # or whichever step you want
-uv sync
-uv run python verify_setup.py
-```
-
-Steps 07 and later also include `verify_llm_registry.py` and `verify_api_key.py` to confirm your LLM configuration before running the full pipeline.
+| Step | What it adds |
+|------|--------------|
+| 01 | World engine, sensor inventory, publisher, transport queue, store backends |
+| 02 | Supervisor graph + orchestrator skeleton |
+| 03 | Cluster (risk) agent skeleton + Send API fan-out |
+| 04 | Logistics agent skeleton |
+| 05 | `@node_executor` decorator — metrics + exception handling |
+| 06 | Jinja2 prompt registry |
+| 07 | LLM registry + cluster agent live |
+| 08 | Logistics tools + logistics agent live |
+| **09** | **Advisory dispatch completed — full end-to-end pipeline operational** |

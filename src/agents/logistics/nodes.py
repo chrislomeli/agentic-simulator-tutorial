@@ -39,6 +39,7 @@ from langchain_core.messages import (
 from langgraph.graph import END
 
 from agents.commons.node_executor import node_executor
+from agents.commons.risk_view import GridRiskView, RiskView
 from agents.commons.schemas import Colors
 from agents.commons.state_types import StatusValue
 from agents.logistics.state import LogisticsAgentState, LogisticsAssessment
@@ -64,7 +65,8 @@ STUB_LOGISTICS = False
 def make_sector_analysis_node(
     world_engine: GenericWorldEngine,
     risk_threshold: int = 5,
-    max_sector_miles: float = 20.0
+    max_sector_miles: float = 20.0,
+    risk_view: RiskView | None = None,
 ):
     """Factory: creates node that analyzes radial sectors around fire hotspots.
     
@@ -83,7 +85,12 @@ def make_sector_analysis_node(
     Node function that returns {"sector_analysis": [...], "status": PROCESSING}
     """
     grid = world_engine.grid
-    
+
+    # Risk read seam. Defaults to the in-memory grid scan (identical to the
+    # previous inline behaviour); a persistent binding can be injected for
+    # deployments where risk does not live on an in-process grid.
+    view: RiskView = risk_view or GridRiskView(grid)
+
     # Infer cell size from physics config (default to 200ft)
     cell_size_ft = getattr(world_engine.physics, 'cell_size_ft', 200.0)
     max_cells = int((max_sector_miles * 5280) / cell_size_ft)
@@ -91,53 +98,45 @@ def make_sector_analysis_node(
     @node_executor("sector_analysis")
     def sector_analysis(state: LogisticsAgentState) -> dict:
         """Analyze radial sectors around high-risk hotspots."""
-        from agents.commons.schemas import CellRiskAssessment
-        
         hotspots = []
-        
-        # Scan grid for hotspots
-        for row in range(grid.rows):
-            for col in range(grid.cols):
-                cell = grid.get_cell(row, col)
-                
-                # Check if cell has risk assessment
-                assessment = cell.risk_assessment
-                if not isinstance(assessment, CellRiskAssessment):
-                    continue
-                
-                risk_score = assessment.risk_score
-                confidence = assessment.confidence
-                
-                if risk_score >= risk_threshold:
-                    # Get wind direction from cell state for alignment check
-                    wind_dir = getattr(cell.cell_state, 'wind_direction_deg', 0)
-                    
-                    # Analyze 8 radial sectors
-                    sectors = []
-                    for sector_name, (dr, dc) in SECTOR_VECTORS.items():
-                        _miles, sector_cells, stop_reason = trace_sector(
-                            grid, row, col, dr, dc, max_cells, cell_size_ft
-                        )
-                        sector_summary = analyze_sector(
-                            sector_name, sector_cells, stop_reason, wind_dir, cell_size_ft
-                        )
-                        sectors.append(sector_summary)
-                    
-                    hotspot = HotspotSectors(
-                        epicenter_row=row,
-                        epicenter_col=col,
-                        risk_score=risk_score,
-                        confidence=confidence,
-                        sectors=sectors
-                    )
-                    hotspots.append(hotspot)
-                    
-                    logger.info(
-                        "Hotspot at (%d, %d): Risk=%d, 8 sectors analyzed, "
-                        "max_burnable=%.1f miles",
-                        row, col, risk_score,
-                        max(s.burnable_miles for s in sectors)
-                    )
+
+        # Hotspot discovery via the RiskView seam — symmetric with the
+        # write path (report_risk -> store). GridRiskView reproduces the
+        # previous in-place grid scan exactly (row-major, same filter), so
+        # behaviour is unchanged for the in-memory demo.
+        for spot in view.hotspots(risk_threshold):
+            row, col = spot.row, spot.col
+            cell = grid.get_cell(row, col)
+
+            # Wind direction is observed-world topology; read from the grid.
+            wind_dir = getattr(cell.cell_state, 'wind_direction_deg', 0)
+
+            # Analyze 8 radial sectors
+            sectors = []
+            for sector_name, (dr, dc) in SECTOR_VECTORS.items():
+                _miles, sector_cells, stop_reason = trace_sector(
+                    grid, row, col, dr, dc, max_cells, cell_size_ft
+                )
+                sector_summary = analyze_sector(
+                    sector_name, sector_cells, stop_reason, wind_dir, cell_size_ft
+                )
+                sectors.append(sector_summary)
+
+            hotspot = HotspotSectors(
+                epicenter_row=row,
+                epicenter_col=col,
+                risk_score=spot.risk_score,
+                confidence=spot.confidence,
+                sectors=sectors
+            )
+            hotspots.append(hotspot)
+
+            logger.info(
+                "Hotspot at (%d, %d): Risk=%d, 8 sectors analyzed, "
+                "max_burnable=%.1f miles",
+                row, col, spot.risk_score,
+                max(s.burnable_miles for s in sectors)
+            )
         
         # Build context string for LLM
         if hotspots:
