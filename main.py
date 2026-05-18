@@ -1,23 +1,21 @@
-"""
-main.py — load the real-world Los Padres scenario and run the streaming
-runtime orchestrator end-to-end.
+"""main.py — local entrypoint: a real entry point to the graph.
 
-Pipeline:
+Demonstrates the deployment-agnostic path:
 
-    scenario_loader  ──► engine + sensor_inventory
-                                │
-                                ▼
-                        RuntimeOrchestrator
-                          │   │   │
-                          │   │   └── SupervisorGraph
-                          │   │         (fans out to cluster agents,
-                          │   │          aggregates cluster_score)
-                          │   └────── CellStateManager (collator)
-                          └────────── SensorPublisher (drives engine.tick)
+    list of changed cells ──► GraphClient.invoke ──► GraphFacade
+                                                       │ reads the world map
+                                                       ▼
+                                       supervisor graph (world injected)
 
-The composition root: wires LLM registry, prompt registry, and the
-supervisor graph (which compiles its child cluster graph internally),
-then hands everything to the RuntimeOrchestrator.
+The CQRS write side (sensors → world update) is *simulated* briefly here
+to produce realistic world state plus the list of changed cells; in a
+real deployment that is the upstream consumer's job, on its own
+deployable. This file then exercises the actual entry point: build a
+TriggerRequest from those cells, call it through the in-process
+GraphClient adapter, print the TriggerResult.
+
+The streaming RuntimeOrchestrator still exists in ``runtime/`` but is no
+longer the entry path — the facade/port is.
 
 Run from the project root::
 
@@ -28,90 +26,65 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import uuid
 
-from agents.commons.agent_dependencies import AgentDependencies
-from agents.logistics.state import LogisticsAssessment
-from agents.supervisor.graph import build_supervisor_graph
-from agents.supervisor.state import SupervisorGraph
 from logging_config import configure_logging
-from prompts import PromptRegistry
-from world import GenericWorldEngine
 
 # configure_logging() must come before all project imports so that
 # module-level loggers are captured by structlog from the first record.
 configure_logging(level=logging.INFO)
 
-from llm.llm_registry import LLM_ROLE_CONFIG, build_llm_registry, models  # noqa: E402
-from agents.commons.schemas import CellReadings, CollatedRecordRisk  # noqa: E402
-from config import get_settings  # noqa: E402
+from agents.commons.schemas import GridPosition  # noqa: E402
+from runtime.composition import build_agent_dependencies, build_supervisor  # noqa: E402
+from runtime.contract import TriggerRequest  # noqa: E402
+from runtime.facade import GraphFacade  # noqa: E402
+from runtime.graph_client import GraphClient, InProcessGraphClient  # noqa: E402
+from stores import get_postgres_data_store  # noqa: E402
+from world.cell_state_manager import CellStateManager  # noqa: E402
 from world.domains.wildfire.sampler import sample_local_conditions  # noqa: E402
 from world.domains.wildfire.scenario_loader import load_scenario_from_db  # noqa: E402
-from runtime import RuntimeOrchestrator  # noqa: E402
-from stores import get_postgres_data_store  # noqa: E402
-from stores.base import DataStore  # noqa: E402
-from world.cell_state_manager import CellStateManager  # noqa: E402
-
-# Smoke-test cadence — fast enough that the demo finishes in a few
-# seconds, slow enough that publisher and consumer can interleave.
-SMOKE_TICKS = 1
-SMOKE_TICK_INTERVAL_SEC = 0.05
-
-def build_agent_deps(
-    engine: GenericWorldEngine,
-    cell_state_manager: CellStateManager,
-    data_store: DataStore | None = None,
-) -> AgentDependencies:
-    """Construct the LLM/prompt/store dependencies for graph compilation."""
-    settings = get_settings()
-    settings.apply_langsmith()
-
-    llm_registry = build_llm_registry(settings, models, LLM_ROLE_CONFIG)
-
-    store = None
-
-    prompt_registry = PromptRegistry()
-    prompt_registry.register_models(CellReadings, CollatedRecordRisk, LogisticsAssessment)
-
-    return AgentDependencies(
-        prompt_registry=prompt_registry,
-        llm_registry=llm_registry,
-        world_engine=engine,
-        cell_state_manager=cell_state_manager,
-        store=store,
-        data_store=data_store,
-    )
 
 
-async def run_orchestrator(engine, sensor_inventory, cell_state_manager, agent_deps) -> None:
-    """Build the supervisor graph, construct the orchestrator, run it."""
-    supervisor_graph: SupervisorGraph = build_supervisor_graph(agent_dependencies=agent_deps)
+def simulate_write_side(engine, sensor_inventory, cell_state_manager) -> list[GridPosition]:
+    """Stand in for the upstream CQRS consumer.
 
-    orchestrator = RuntimeOrchestrator(
-        sensor_inventory=sensor_inventory,
-        engine=engine,
-        supervisor_graph=supervisor_graph,
-        cell_state_manager=cell_state_manager,
-        sampler=sample_local_conditions,
-        tick_interval_seconds=SMOKE_TICK_INTERVAL_SEC,
-        location_count=1
-    )
+    Advances the world one tick, feeds each sensor's reading into the
+    world (CellStateManager), and returns the cells that changed. In a
+    real deployment this is a separate consumer that commits the world
+    update *before* the trigger is sent; here it just produces realistic
+    state plus the trigger the entry point will consume.
+    """
+    engine.tick()
+    changed: set[tuple[int, int]] = set()
+    for sensor in sensor_inventory.all_sensors():
+        if sensor.grid_row is None or sensor.grid_col is None:
+            continue
+        conditions = sample_local_conditions(engine, sensor.grid_row, sensor.grid_col)
+        event = sensor.emit(conditions)
+        if event is None:
+            continue
+        for _cluster_id, row, col in cell_state_manager.update(event):
+            changed.add((row, col))
+    return [GridPosition(row=r, col=c) for r, c in sorted(changed)]
+
+
+async def run_entrypoint(client: GraphClient, cells: list[GridPosition]) -> None:
+    """The actual entry point: a trigger (list of cells) → the graph."""
+    request = TriggerRequest(correlation_id=str(uuid.uuid4()), cells=cells)
 
     print()
-    print(f"=== Running orchestrator for {SMOKE_TICKS} tick(s) ===")
-    stats = await orchestrator.run(ticks=SMOKE_TICKS)
+    print(f"=== Invoking graph for trigger {request.correlation_id} ===")
+    print(f"  changed cells: {len(cells)}")
+    result = await client.invoke(request)
 
     print()
-    print("=== Run complete ===")
-    print(f"  ticks completed:           {stats.ticks_completed}")
-    print(f"  events consumed:           {stats.events_consumed}")
-    print(f"  CollatedRecords emitted:   {stats.records_emitted}")
-    print(f"  graph invocations:         {stats.graph_invocations}")
-    for cluster, n in stats.invocations_by_cluster.items():
-        print(f"    {cluster:24s}  invocations: {n:3d}")
-    print(f"  RiskAssessments produced:  {stats.risk_assessments_produced}")
-    if stats.cluster_score:
+    print("=== Result ===")
+    print(f"  correlation_id:           {result.correlation_id}")
+    print(f"  clusters processed:       {len(result.cluster_ids)}")
+    print(f"  RiskAssessments produced: {result.assessments_produced}")
+    if result.cluster_score:
         print("  Cluster risk scores (0–10):")
-        for cluster, score in sorted(stats.cluster_score.items()):
+        for cluster, score in sorted(result.cluster_score.items()):
             print(f"    {cluster:24s}  score: {score.risk_score:2d},  confidence: {score.confidence:2d}")
 
 
@@ -123,9 +96,23 @@ def main() -> None:
             world_grid=engine.grid,
             sensor_inventory=sensor_inventory,
         )
+        agent_deps = build_agent_dependencies(engine, cell_state_manager, data_store=data_store)
+        supervisor_graph = build_supervisor(agent_deps)
 
-        agent_dependencies = build_agent_deps(engine, cell_state_manager, data_store=data_store)
-        asyncio.run(run_orchestrator(engine, sensor_inventory, cell_state_manager, agent_dependencies))
+        # Built once (startup phase): the directly-callable service and
+        # the in-process binding of the outbound port.
+        facade = GraphFacade(
+            supervisor_graph=supervisor_graph,
+            cell_state_manager=cell_state_manager,
+        )
+        client: GraphClient = InProcessGraphClient(facade)
+
+        # Upstream write side (simulated): commit world state, get the
+        # changed cells. In production this is a separate deployable.
+        changed_cells = simulate_write_side(engine, sensor_inventory, cell_state_manager)
+
+        # The real entry point: trigger → graph, via the port.
+        asyncio.run(run_entrypoint(client, changed_cells))
     finally:
         data_store.close()
 

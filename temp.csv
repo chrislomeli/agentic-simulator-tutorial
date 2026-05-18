@@ -1,0 +1,9 @@
+component,local,docker-compose,k8-desktop,k8-deployed,aws
+API,exposes API to simulator,fastAPI contanerd,fastAPI contanerd,fastAPI contanerd(EKS),fastAPI contanerd
+Postgres,"postgres GIS, pgvector database",postgres contanerd,postgres contanerd,RDS,RDS
+Events producer (world),generates events and queues,contanerd,contanerd,contanerd (EKS),?
+Sensor Events Queue ,queue for sensor events,contanerd,contanerd,contanerd (EKS),?
+Sensor Events consumer,consumes then transform and packages requests for Langraph app,contanerd,contanerd,contanerd (EKS),?
+AI Queue or API,queue for langraph app requests,"kafaka contanerd, or another fastAPI over the app",kafaka or fastAPI contanerd binding,MKS,MKS or Fast
+Lanngraph endpoint/consumer,a think layer that gathers the information that the Langgraph app needs and invokes the graph,- probably packed with Langgrap app,- probably packed with Langgrap app,- probably packed with Langgrap app,- probably packed with Langgrap app
+LangGraph app,orchestrator that gasthers preconditions and calls the graph,contanerd,contanerd,contanerd (EKS),contanerd

@@ -24,7 +24,11 @@ class AgentDependencies(BaseModel):
 
     llm_registry: LLMRegistry
     prompt_registry: PromptRegistry
-    data_store: DataStore
     world_engine: GenericWorldEngine
-    cell_state_manager: CellStateManager
+    # Optional because every consumer already guards for absence
+    # (logistics graph: `data_store is not None`; cluster graph passes
+    # cell_state_manager into a `| None` factory). Stub-mode tests build
+    # partial deps; production always supplies them via composition.
+    data_store: DataStore | None = None
+    cell_state_manager: CellStateManager | None = None
     store: BaseStore | None = None
