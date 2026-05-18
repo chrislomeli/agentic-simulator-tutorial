@@ -4,7 +4,6 @@ import random
 
 import pytest
 
-from world import GenericWorldEngine
 from world.domains.wildfire import FireState, TerrainType
 from world.domains.wildfire.physics import SimpleFirePhysicsModule
 from world.domains.wildfire.rothermel_physics import RothermelFirePhysicsModule
@@ -13,6 +12,7 @@ from world.domains.wildfire.scenarios import (
     create_full_wildfire_scenario,
     create_wildfire_resources,
 )
+from world import GenericWorldEngine
 
 
 @pytest.fixture(autouse=True)

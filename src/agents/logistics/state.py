@@ -23,9 +23,11 @@ from typing import Annotated, NewType
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
 from langgraph.graph.state import CompiledStateGraph
-from pydantic import BaseModel, Field
+from pydantic import Field
 
-from agents.commons.schemas import CollatedRecordRisk, ResourceAdvisory, TracedState
+from pydantic import BaseModel
+
+from agents.commons.schemas import CollatedRecordRisk, TracedState, ResourceAdvisory
 
 LogisticsGraph = NewType("LogisticsGraph", CompiledStateGraph)
 

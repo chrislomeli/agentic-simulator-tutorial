@@ -1,37 +1,30 @@
 """Tests for the graph entry-point seam: contract, facade, in-process port.
 
-The contract now carries sensor events (not positions): the facade folds
-them onto its seed-hydrated world. ``invoke_supervisor_for_trigger`` is
-monkeypatched so these assert the facade's own behaviour — fold → readings
-→ write seam → invoke — without depending on graph internals.
+The facade is isolated by monkeypatching ``invoke_supervisor_for_trigger``
+so these assert the facade's own behaviour (mirrors the streaming
+orchestrator's invoke path) without depending on graph internals.
 """
 
 from __future__ import annotations
 
 from types import SimpleNamespace
 
+from agents.commons.schemas import GridPosition
 from agents.supervisor.state import RiskScore
 from runtime.contract import TriggerRequest, TriggerResult
 from runtime.facade import GraphFacade
 from runtime.graph_client import GraphClient, InProcessGraphClient
 from runtime.orchestrator import SupervisorInvocation
-from world.transport import SensorEvent
-
-
-def _event(source_id: str = "s1") -> SensorEvent:
-    return SensorEvent.create(
-        source_id=source_id,
-        source_type="temperature",
-        cluster_id="c1",
-        payload={"celsius": 42.1},
-    )
 
 
 # ── contract roundtrip ────────────────────────────────────────────────
 
 
 def test_trigger_request_roundtrip():
-    req = TriggerRequest(correlation_id="abc", events=[_event("a"), _event("b")])
+    req = TriggerRequest(
+        correlation_id="abc",
+        cells=[GridPosition(row=1, col=2), GridPosition(row=3, col=4)],
+    )
     assert TriggerRequest.model_validate_json(req.model_dump_json()) == req
 
 
@@ -49,18 +42,10 @@ def test_trigger_result_roundtrip():
 
 
 class FakeManager:
-    """Stands in for the seed-hydrated CellStateManager the facade owns."""
-
-    def __init__(self, *, triggered, payload):
-        self._triggered = triggered  # list[(cluster_id, row, col)]
+    def __init__(self, payload):
         self._payload = payload
-        self.updated_events: list[SensorEvent] = []
         self.readings_for_called_with = None
         self.marked = None
-
-    def update(self, event):
-        self.updated_events.append(event)
-        return self._triggered
 
     def readings_for(self, positions):
         self.readings_for_called_with = set(positions)
@@ -70,51 +55,36 @@ class FakeManager:
         self.marked = set(positions)
 
 
-class FakeWriter:
-    """Captures the WorldStateWriter seam calls (the 'end the flow' step)."""
-
-    def __init__(self):
-        self.calls: list[tuple[str, set]] = []
-
-    def write(self, *, correlation_id, changed_cells):
-        self.calls.append((correlation_id, set(changed_cells)))
-
-
 def _readings(row, col):
     return SimpleNamespace(position=SimpleNamespace(row=row, col=col))
 
 
-# ── facade: no readings → graph not invoked, but write seam still runs ─
+# ── facade: empty payload short-circuits, graph not invoked ───────────
 
 
 async def test_run_trigger_empty_payload_skips_graph(monkeypatch):
     async def fake_invoke(graph, payload):
-        raise AssertionError("invoke must not be called when nothing triggered")
+        raise AssertionError("invoke must not be called on empty payload")
 
     monkeypatch.setattr("runtime.facade.invoke_supervisor_for_trigger", fake_invoke)
 
-    mgr = FakeManager(triggered=[], payload={})
-    writer = FakeWriter()
-    facade = GraphFacade(
-        supervisor_graph=object(), cell_state_manager=mgr, world_state_writer=writer
-    )
-    req = TriggerRequest(correlation_id="cid", events=[_event()])
+    mgr = FakeManager(payload={})
+    facade = GraphFacade(supervisor_graph=object(), cell_state_manager=mgr)
+    req = TriggerRequest(correlation_id="cid", cells=[GridPosition(row=5, col=6)])
 
     res = await facade.run_trigger(req)
 
     assert res == TriggerResult(
         correlation_id="cid", cluster_ids=[], cluster_score={}, assessments_produced=0
     )
-    assert len(mgr.updated_events) == 1  # event was folded
+    assert mgr.readings_for_called_with == {(5, 6)}
     assert mgr.marked == set()  # nothing included → nothing marked
-    # CQRS: the write seam fires even on the short-circuit path.
-    assert writer.calls == [("cid", set())]
 
 
-# ── facade: events fold → readings → write seam → graph invoked ───────
+# ── facade: non-empty payload invokes graph and maps the outcome ──────
 
 
-async def test_run_trigger_folds_invokes_and_maps(monkeypatch):
+async def test_run_trigger_invokes_and_maps(monkeypatch):
     seen = {}
 
     async def fake_invoke(graph, payload):
@@ -128,15 +98,12 @@ async def test_run_trigger_folds_invokes_and_maps(monkeypatch):
     monkeypatch.setattr("runtime.facade.invoke_supervisor_for_trigger", fake_invoke)
 
     payload = {"c1": [_readings(1, 2), _readings(3, 4)]}
-    mgr = FakeManager(
-        triggered=[("c1", 1, 2), ("c1", 3, 4)],
-        payload=payload,
+    mgr = FakeManager(payload=payload)
+    facade = GraphFacade(supervisor_graph=object(), cell_state_manager=mgr)
+    req = TriggerRequest(
+        correlation_id="cid",
+        cells=[GridPosition(row=1, col=2), GridPosition(row=3, col=4)],
     )
-    writer = FakeWriter()
-    facade = GraphFacade(
-        supervisor_graph=object(), cell_state_manager=mgr, world_state_writer=writer
-    )
-    req = TriggerRequest(correlation_id="cid", events=[_event()])
 
     res = await facade.run_trigger(req)
 
@@ -149,7 +116,6 @@ async def test_run_trigger_folds_invokes_and_maps(monkeypatch):
     )
     assert mgr.readings_for_called_with == {(1, 2), (3, 4)}
     assert mgr.marked == {(1, 2), (3, 4)}  # included derived from payload
-    assert writer.calls == [("cid", {(1, 2), (3, 4)})]
 
 
 # ── in-process port delegates to the facade ───────────────────────────
@@ -170,7 +136,7 @@ async def test_in_process_client_delegates():
 
     ff = FakeFacade()
     client: GraphClient = InProcessGraphClient(ff)
-    req = TriggerRequest(correlation_id="z", events=[])
+    req = TriggerRequest(correlation_id="z", cells=[])
 
     out = await client.invoke(req)
 

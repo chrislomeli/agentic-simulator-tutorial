@@ -1,25 +1,20 @@
-"""runtime.facade — the application service: turn a trigger (a batch of
-sensor events) into a graph run, returning a typed result.
+"""runtime.facade — the application service: turn a trigger (a list of
+changed cells) into a graph run, returning a typed result.
 
 This is the single home of "trigger → graph". Every inbound transport
 (local main, FastAPI route, AgentCore entrypoint) is a thin adapter over
 ``GraphFacade.run_trigger``; nothing duplicates this logic.
 
-The fold lives here, on the graph side
-──────────────────────────────────────
-The facade owns a ``CellStateManager`` hydrated once from the *immutable
-DB seed*. Each trigger folds its events onto that in-memory world
-(snapshot + event replay), so the seed is never mutated and scenarios
-replay identically. The consumer is a thin bridge that just forwards
-events through the port — it owns no world state. The same fold callable
-could be placed on the consumer side by a different profile; only the
-wire payload would change, not this logic.
-
 Two phases, deliberately separated:
-  - construction (once): hold the compiled graph, the seed-hydrated
-    CellStateManager, and the WorldStateWriter seam.
-  - run_trigger (per trigger): fold events → derive readings → persist
-    the change ("end the event flow", stubbed) → invoke the graph.
+  - construction (once): hold the compiled graph + CellStateManager.
+  - run_trigger (per trigger): read the world for the changed cells,
+    build the per-cluster payload, invoke the graph.
+
+``run_trigger`` mirrors the streaming orchestrator's invoke path exactly
+(``readings_for`` → ``mark_cells_evaluated`` → ``invoke_supervisor_for_trigger``)
+so behaviour is identical whether a trigger arrives via the stream loop
+or via this facade. The world map is *not* passed in — it is read here
+and reaches the graph nodes via dependency injection at build time.
 """
 
 from __future__ import annotations
@@ -29,7 +24,6 @@ import logging
 from agents.supervisor.state import SupervisorGraph
 from runtime.contract import TriggerRequest, TriggerResult
 from runtime.orchestrator import invoke_supervisor_for_trigger
-from stores.world_state import LoggingWorldStateWriter, WorldStateWriter
 from world.cell_state_manager import CellStateManager
 
 logger = logging.getLogger(__name__)
@@ -46,27 +40,19 @@ class GraphFacade:
         *,
         supervisor_graph: SupervisorGraph,
         cell_state_manager: CellStateManager,
-        world_state_writer: WorldStateWriter | None = None,
     ) -> None:
         self._graph = supervisor_graph
         self._manager = cell_state_manager
-        self._writer: WorldStateWriter = world_state_writer or LoggingWorldStateWriter()
 
     async def run_trigger(self, request: TriggerRequest) -> TriggerResult:
-        """Fold the trigger's events onto the seed-hydrated world and run
-        the graph.
+        """Read the world for the changed cells and run the graph.
 
-        Returns an empty result (no graph invocation) when the folded
-        events trip no cell with readings — the same short-circuit the
-        streaming loop applied when its coalesced payload was empty.
+        Returns an empty result (no graph invocation) when none of the
+        requested cells have readings — same short-circuit the streaming
+        loop applies when its coalesced payload is empty.
         """
-        # ── Fold events onto the immutable-seed world (the "shim") ──────
-        triggered: set[tuple[int, int]] = set()
-        for event in request.events:
-            for _cluster_id, row, col in self._manager.update(event):
-                triggered.add((row, col))
-
-        payload = self._manager.readings_for(positions=triggered)
+        positions: set[tuple[int, int]] = {(c.row, c.col) for c in request.cells}
+        payload = self._manager.readings_for(positions=positions)
 
         included: set[tuple[int, int]] = set()
         for readings in payload.values():
@@ -74,18 +60,11 @@ class GraphFacade:
                 included.add((r.position.row, r.position.col))
         self._manager.mark_cells_evaluated(included)
 
-        # ── End the event flow: persist the change (stubbed; seed is
-        #    immutable). CQRS ordering: write before the graph runs. ─────
-        self._writer.write(
-            correlation_id=request.correlation_id,
-            changed_cells=triggered,
-        )
-
         if not payload:
             logger.info(
-                "Trigger %s: %d event(s) folded, no triggered readings — graph not invoked",
+                "Trigger %s: no readings for %d requested cell(s) — graph not invoked",
                 request.correlation_id,
-                len(request.events),
+                len(request.cells),
             )
             return TriggerResult(
                 correlation_id=request.correlation_id,

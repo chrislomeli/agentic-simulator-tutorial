@@ -8,9 +8,9 @@ import random
 
 import pytest
 
-from world import GenericWorldEngine
 from world.domains.wildfire import FirePhysicsModule
 from world.domains.wildfire.environment import FireEnvironmentState
+from world import GenericWorldEngine
 from world.generic_grid import GenericTerrainGrid
 
 

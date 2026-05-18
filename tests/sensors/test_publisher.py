@@ -4,10 +4,10 @@ import asyncio
 
 import pytest
 
-from world.sensor_inventory import SensorInventory
 from world.sensors import SensorPublisher
 from world.sensors.base import FailureMode, SensorBase
 from world.transport import SensorEvent, SensorEventQueue
+from world.sensor_inventory import SensorInventory
 
 
 class _FakeSensor(SensorBase):

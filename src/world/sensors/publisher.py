@@ -46,7 +46,7 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-from world.transport.port import EventQueue
+from world.transport.queue import SensorEventQueue
 
 if TYPE_CHECKING:
     from world.generic_engine import GenericWorldEngine
@@ -75,7 +75,7 @@ class SensorPublisher:
         self,
         *,
         inventory: SensorInventory,
-        queue: EventQueue,
+        queue: SensorEventQueue,
         tick_interval_seconds: float = 1.0,
         engine: GenericWorldEngine | None = None,
         sampler: SamplerFn | None = None,
